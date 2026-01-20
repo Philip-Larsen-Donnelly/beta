@@ -1,0 +1,64 @@
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: beta
+      POSTGRES_PASSWORD: beta
+      POSTGRES_DB: beta
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U beta"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    image: beta-app:latest
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://beta:beta@db:5432/beta
+      DATABASE_SSL: "false"
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    expose:
+      - "3000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.beta.rule=Host(`${APP_HOST:-localhost}`)"
+      - "traefik.http.routers.beta.entrypoints=web,websecure"
+      - "traefik.http.routers.beta.tls.certresolver=le"
+      - "traefik.http.services.beta.loadbalancer.server.port=3000"
+
+  traefik:
+    image: traefik:v3.1
+    restart: unless-stopped
+    user: "0:0"
+    group_add:
+      - "988"
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.le.acme.tlschallenge=true"
+      - "--certificatesresolvers.le.acme.email=${LETSENCRYPT_EMAIL:-admin@example.com}"
+      - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - traefik-data:/letsencrypt
+
+volumes:
+  db-data:
+  traefik-data:
+
