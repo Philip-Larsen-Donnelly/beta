@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -34,9 +35,11 @@ interface BugListProps {
   currentUserId: string
   isAdmin: boolean
   onBugUpdated: () => void
+  variant?: "table" | "cards"
+  maxItems?: number
 }
 
-export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated }: BugListProps) {
+export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = "table", maxItems }: BugListProps) {
   const [editingBug, setEditingBug] = useState<Bug | null>(null)
   const [editTitle, setEditTitle] = useState("")
   const [editDescription, setEditDescription] = useState("")
@@ -44,6 +47,7 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated }: BugListP
   const [editPriority, setEditPriority] = useState<BugPriority>("medium")
   const [editStatus, setEditStatus] = useState<BugStatus>("open")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
 
   const openEditDialog = (bug: Bug) => {
     setEditingBug(bug)
@@ -79,74 +83,144 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated }: BugListP
     return <div className="rounded-md border p-8 text-center text-muted-foreground">No bugs reported yet.</div>
   }
 
-  return (
-    <>
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Title</TableHead>
-              <TableHead>Reporter</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Severity</TableHead>
-              <TableHead>Priority</TableHead>
-              <TableHead className="text-right">Reported</TableHead>
-              <TableHead className="w-[50px]"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {bugs.map((bug) => {
-              const isOwnBug = bug.user_id === currentUserId
-              const canEdit = isAdmin || isOwnBug
+  // Card variant for personal/compact views
+  const renderCards = () => {
+    const hasMore = maxItems !== undefined && bugs.length > maxItems
+    const visibleBugs = hasMore && !isExpanded ? bugs.slice(0, maxItems) : bugs
+    const hiddenCount = bugs.length - (maxItems ?? bugs.length)
 
-              return (
-                <TableRow key={bug.id} className={cn(isOwnBug && "bg-primary/5")}>
-                  <TableCell>
+    return (
+      <div className="space-y-2">
+        {visibleBugs.map((bug) => {
+          const isOwnBug = bug.user_id === currentUserId
+          const canEdit = isAdmin || isOwnBug
+
+          return (
+            <Card key={bug.id} className="overflow-hidden py-0">
+              <CardContent className="py-2.5 px-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium">{bug.title}</span>
+                      <h3 className="font-medium truncate">{bug.title}</h3>
                       {isOwnBug && (
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" className="text-xs shrink-0">
                           Yours
                         </Badge>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground line-clamp-1 max-w-[300px]">{bug.description}</p>
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {bug.profile?.display_name || bug.profile?.email || "Unknown"}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={cn("text-xs", statusConfig[bug.status])}>
-                      {bug.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={cn("text-xs", severityConfig[bug.severity])}>
-                      {bug.severity}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs">
-                      {bug.priority}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right text-sm text-muted-foreground">
-                    {formatDistanceToNow(new Date(bug.created_at), { addSuffix: true })}
-                  </TableCell>
-                  <TableCell>
-                    {canEdit && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditDialog(bug)}>
-                        <Pencil className="h-4 w-4" />
-                        <span className="sr-only">Edit bug</span>
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
+                    <p className="text-sm text-muted-foreground line-clamp-2 mb-1.5">{bug.description}</p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge variant="outline" className={cn("text-xs", statusConfig[bug.status])}>
+                        {bug.status}
+                      </Badge>
+                      <Badge variant="outline" className={cn("text-xs", severityConfig[bug.severity])}>
+                        {bug.severity}
+                      </Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {bug.priority}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(bug.created_at), { addSuffix: true })}
+                      </span>
+                    </div>
+                  </div>
+                  {canEdit && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => openEditDialog(bug)}>
+                      <Pencil className="h-4 w-4" />
+                      <span className="sr-only">Edit bug</span>
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
+        {hasMore && (
+          <Button
+            variant="ghost"
+            className="w-full text-muted-foreground"
+            onClick={() => setIsExpanded(!isExpanded)}
+          >
+            {isExpanded ? "Show less" : `Show ${hiddenCount} more`}
+          </Button>
+        )}
       </div>
+    )
+  }
+
+  // Table variant for full lists
+  const renderTable = () => (
+    <div className="rounded-md border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Title</TableHead>
+            <TableHead>Reporter</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Severity</TableHead>
+            <TableHead>Priority</TableHead>
+            <TableHead className="text-right">Reported</TableHead>
+            <TableHead className="w-[50px]"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {bugs.map((bug) => {
+            const isOwnBug = bug.user_id === currentUserId
+            const canEdit = isAdmin || isOwnBug
+
+            return (
+              <TableRow key={bug.id} className={cn(isOwnBug && "bg-primary/5")}>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{bug.title}</span>
+                    {isOwnBug && (
+                      <Badge variant="outline" className="text-xs">
+                        Yours
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground line-clamp-1 max-w-[300px]">{bug.description}</p>
+                </TableCell>
+                <TableCell className="text-sm">
+                  {bug.profile?.display_name || bug.profile?.email || "Unknown"}
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className={cn("text-xs", statusConfig[bug.status])}>
+                    {bug.status}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className={cn("text-xs", severityConfig[bug.severity])}>
+                    {bug.severity}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="text-xs">
+                    {bug.priority}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right text-sm text-muted-foreground">
+                  {formatDistanceToNow(new Date(bug.created_at), { addSuffix: true })}
+                </TableCell>
+                <TableCell>
+                  {canEdit && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditDialog(bug)}>
+                      <Pencil className="h-4 w-4" />
+                      <span className="sr-only">Edit bug</span>
+                    </Button>
+                  )}
+                </TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  )
+
+  return (
+    <>
+      {variant === "cards" ? renderCards() : renderTable()}
 
       {/* Edit Bug Dialog */}
       <Dialog open={!!editingBug} onOpenChange={(open) => !open && setEditingBug(null)}>
