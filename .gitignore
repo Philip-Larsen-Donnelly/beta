@@ -3,3 +3,6 @@
 node_modules
 .next
 *.tar
+backup.sql
+.env.local
+.vscode/settings.json
