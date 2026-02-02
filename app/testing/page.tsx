@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { requireProfile } from "@/lib/auth"
 import { query } from "@/lib/db"
 import { CampaignList } from "@/components/campaign-list"
+import { UserStatsCards } from "@/components/user-stats-cards"
 
 export default async function TestingPage() {
   const profile = await requireProfile()
@@ -19,5 +20,15 @@ export default async function TestingPage() {
     }
   })
 
-  return <CampaignList campaigns={campaigns || []} componentCounts={componentCounts} />
+  return (
+    <div className="flex gap-6 items-start">
+      <div className="flex-1 min-w-0">
+        <CampaignList
+          campaigns={campaigns || []}
+          componentCounts={componentCounts}
+        />
+      </div>
+      <UserStatsCards />
+    </div>
+  )
 }

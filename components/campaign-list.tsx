@@ -81,7 +81,7 @@ export function CampaignList({ campaigns, componentCounts }: CampaignListProps) 
       </div>
 
       {filteredCampaigns.length > 0 ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 grid-cols-2">
           {filteredCampaigns.map((campaign) => {
             const status = getCampaignStatus(campaign)
             const CardWrapper = status.active ? Link : "div"
