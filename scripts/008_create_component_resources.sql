@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS public.component_resources (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   component_id UUID NOT NULL REFERENCES public.components(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('testpad', 'markdown')),
+  type TEXT NOT NULL CHECK (type IN ('testpad', 'markdown', 'video')),
   content TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()

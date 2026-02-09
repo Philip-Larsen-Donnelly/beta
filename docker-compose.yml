@@ -30,6 +30,8 @@ services:
       HOSTNAME: 0.0.0.0
     expose:
       - "3000"
+    volumes:
+      - uploads-data:/app/public/uploads
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.beta.rule=Host(`${APP_HOST:-localhost}`)"
@@ -61,4 +63,5 @@ services:
 volumes:
   db-data:
   traefik-data:
+  uploads-data:
 

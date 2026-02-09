@@ -21,7 +21,7 @@ export default async function AdminPage() {
 
   const { rows: bugCounts } = await query<{ open: number; resolved: number }>(
     `SELECT
-       COUNT(*) FILTER (WHERE status IN ('open', 'reviewed'))::int AS open,
+       COUNT(*) FILTER (WHERE status IN ('open', 'reported'))::int AS open,
        COUNT(*) FILTER (WHERE status IN ('closed', 'fixed'))::int AS resolved
      FROM bugs`,
   )

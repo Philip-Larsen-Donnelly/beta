@@ -580,7 +580,9 @@ function ComponentForm({ initialData, onSave, onCancel, categoryOptions, selecte
 
   function ResourceForm({ initial, componentId, onSave, onCancel }: ResourceFormProps) {
     const [name, setName] = useState(initial?.name || "")
-    const [type, setType] = useState<"markdown" | "testpad">((initial?.type as any) || "markdown")
+    const [type, setType] = useState<"markdown" | "testpad" | "video">(
+      (initial?.type as any) || "markdown",
+    )
     const [content, setContent] = useState(initial?.content || "")
     const [saving, setSaving] = useState(false)
 
@@ -635,6 +637,7 @@ function ComponentForm({ initialData, onSave, onCancel, categoryOptions, selecte
             <SelectContent>
               <SelectItem value="markdown">markdown</SelectItem>
               <SelectItem value="testpad">testpad</SelectItem>
+              <SelectItem value="video">video</SelectItem>
             </SelectContent>
           </Select>
         </div>

@@ -1,10 +1,12 @@
 import { query } from "@/lib/db"
+import { requireProfile } from "@/lib/auth"
 import { AdminBugList } from "@/components/admin/bug-list"
 import { AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 
 export default async function AdminBugsPage() {
+  const profile = await requireProfile()
   let bugs = []
   let components = []
   let campaigns = []
@@ -18,7 +20,8 @@ export default async function AdminBugsPage() {
                 c.campaign_id AS component_campaign_id,
                 camp.name AS campaign_name,
                 p.display_name AS profile_display_name,
-                p.email AS profile_email
+                p.email AS profile_email,
+                (SELECT COUNT(*)::int FROM bug_votes bv WHERE bv.bug_id = b.id) AS vote_count
          FROM bugs b
          LEFT JOIN components c ON c.id = b.component_id
          LEFT JOIN campaigns camp ON camp.id = c.campaign_id
@@ -83,7 +86,12 @@ export default async function AdminBugsPage() {
         <p className="text-muted-foreground">View and manage all submitted bugs across campaigns</p>
       </div>
 
-      <AdminBugList bugs={bugs} components={components} campaigns={campaigns} />
+      <AdminBugList
+        bugs={bugs}
+        components={components}
+        campaigns={campaigns}
+        currentUserId={profile.id}
+      />
     </div>
   )
 }

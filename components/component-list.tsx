@@ -35,7 +35,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Empty,
   EmptyHeader,
@@ -72,31 +78,36 @@ const statusConfig: Record<
     icon: React.ElementType;
     className: string;
     selectClassName: string;
+    cardClassName: string;
   }
 > = {
   not_started: {
     label: "Not Started",
     icon: Circle,
-    className: "bg-muted text-muted-foreground",
+    className: "selected-card__status selected-card__status--not-started",
     selectClassName: "border-muted",
+    cardClassName: "selected-card--not-started",
   },
   in_progress: {
     label: "In Progress",
     icon: Clock,
-    className: "bg-blue-500/10 text-blue-700 border-blue-200",
+    className: "selected-card__status selected-card__status--in-progress",
     selectClassName: "border-blue-300 bg-blue-500/10 text-blue-700",
+    cardClassName: "selected-card--in-progress",
   },
   completed: {
     label: "Completed",
     icon: CheckCircle2,
-    className: "bg-green-500/10 text-green-700 border-green-200",
+    className: "selected-card__status selected-card__status--completed",
     selectClassName: "border-green-300 bg-green-500/10 text-green-700",
+    cardClassName: "selected-card--completed",
   },
   blocked: {
     label: "Blocked",
     icon: Ban,
-    className: "bg-red-500/10 text-red-700 border-red-200",
+    className: "selected-card__status selected-card__status--blocked",
     selectClassName: "border-red-300 bg-red-500/10 text-red-700",
+    cardClassName: "selected-card--blocked",
   },
 };
 
@@ -132,6 +143,12 @@ export function ComponentList({
 
   const [stats, setStats] = useState(initialStats);
   const [isStatusInfoOpen, setIsStatusInfoOpen] = useState(false);
+  const [showAllComponents, setShowAllComponents] = useState(() => {
+    const hasSelected = components.some(
+      (c) => localStatuses[c.id]?.is_selected,
+    );
+    return !hasSelected;
+  });
 
   const getStatus = (componentId: string): UserComponentStatus | null => {
     return localStatuses[componentId] || null;
@@ -266,52 +283,55 @@ export function ComponentList({
               const myBugCount = stats.myBugCounts?.[component.id] || 0;
 
               return (
-                <Card key={component.id} className="py-3 relative group">
+                <Card
+                  key={component.id}
+                  className={cn("selected-card", config.cardClassName)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`View ${component.name} details`}
+                  onClick={() => router.push(`/testing/${component.id}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      router.push(`/testing/${component.id}`);
+                    }
+                  }}
+                >
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="absolute top-2 right-2 h-6 w-6 opacity-60 hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
-                    onClick={() => handleSelectToggle(component.id, false)}
+                    className="selected-card__remove"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleSelectToggle(component.id, false);
+                    }}
                     aria-label={`Remove ${component.name} from selection`}
                   >
                     <X className="h-3.5 w-3.5" />
                   </Button>
-                  <CardContent className="px-4 py-0 space-y-2">
-                    <div className="pr-6">
-                      <Link
-                        href={`/testing/${component.id}`}
-                        className="font-medium text-sm hover:underline line-clamp-1"
-                      >
-                        {component.name}
-                      </Link>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge
-                        variant="outline"
-                        className={cn("text-xs", config.className)}
-                      >
+                  <CardHeader className="selected-card__header">
+                    <div className="selected-card__header-row">
+                      <Badge variant="outline" className={config.className}>
                         <StatusIcon className="h-3 w-3 mr-1" />
                         {config.label}
                       </Badge>
-                      {myBugCount > 0 && (
-                        <Badge
-                          variant="outline"
-                          className="text-xs bg-indigo-500/10 text-indigo-700 border-indigo-200"
-                        >
-                          <Bug className="h-3 w-3 mr-1" />
-                          {myBugCount} bug{myBugCount !== 1 ? "s" : ""} reported
-                          by me
-                        </Badge>
-                      )}
                     </div>
-                    <div className="flex flex-wrap gap-1">
+                  </CardHeader>
+                  <CardContent className="selected-card__body">
+                    <CardTitle className="selected-card__title">
+                      {component.name}
+                    </CardTitle>
+                    <p className="selected-card__description">
+                      {component.description}
+                    </p>
+                    <div className="selected-card__categories">
                       {(categoryMap[component.id] || []).map((catId) => {
                         const cat = categories.find((c) => c.id === catId);
                         if (!cat) return null;
                         return (
                           <span
                             key={cat.id}
-                            className="px-1.5 py-0.5 rounded text-[10px] font-medium border"
+                            className="selected-card__category-chip"
                             style={{
                               backgroundColor: `${cat.color}1A`,
                               borderColor: cat.color,
@@ -324,6 +344,20 @@ export function ComponentList({
                       })}
                     </div>
                   </CardContent>
+                  <CardFooter className="selected-card__footer">
+                    <div className="selected-card__footer-content">
+                      {myBugCount > 0 && (
+                        <Badge
+                          variant="outline"
+                          className="selected-card__bug-badge"
+                        >
+                          <Bug className="h-3 w-3 mr-1" />
+                          {myBugCount} bug{myBugCount !== 1 ? "s" : ""} reported
+                          by me
+                        </Badge>
+                      )}
+                    </div>
+                  </CardFooter>
                 </Card>
               );
             })}
@@ -333,382 +367,400 @@ export function ComponentList({
 
       {/* Component Table */}
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold">
-            All Components in This Campaign
-          </h3>
-          <Badge variant="secondary" className="text-xs">
-            {components.length}
-          </Badge>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold">
+              All Components in This Campaign
+            </h3>
+            <Badge variant="secondary" className="text-xs">
+              {components.length}
+            </Badge>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAllComponents((prev) => !prev)}
+          >
+            {showAllComponents ? "Hide all components" : "Show all components"}
+          </Button>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Please select only the components you intend to test, so that we can
-          get an accurate idea of how much testing each component will receive.
-        </p>
-        <div className="rounded-md border overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">Select</TableHead>
-                <TableHead>Component</TableHead>
-                <TableHead className="w-40">Categories</TableHead>
-                <TableHead className="w-36">
-                  <div className="flex items-center gap-1">
-                    <span>My Status</span>
-                    <Dialog
-                      open={isStatusInfoOpen}
-                      onOpenChange={setIsStatusInfoOpen}
-                    >
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <DialogTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                              aria-label="View status definitions"
-                            >
-                              <Info className="h-4 w-4" />
-                            </Button>
-                          </DialogTrigger>
-                        </TooltipTrigger>
-                        <TooltipContent>View status definitions</TooltipContent>
-                      </Tooltip>
-                      <DialogContent className="max-w-4xl max-h-[85vh] overflow-auto">
-                        <DialogHeader>
-                          <DialogTitle>Status definitions</DialogTitle>
-                          <DialogDescription>
-                            What each testing status means.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-3 text-sm">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="bg-muted">
-                              Not Started
-                            </Badge>
-                            <span className="text-muted-foreground">
-                              Haven&apos;t begun testing
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge
-                              variant="outline"
-                              className="bg-blue-500/10 text-blue-700 border-blue-200"
-                            >
-                              In Progress
-                            </Badge>
-                            <span className="text-muted-foreground">
-                              Currently testing
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge
-                              variant="outline"
-                              className="bg-green-500/10 text-green-700 border-green-200"
-                            >
-                              Completed
-                            </Badge>
-                            <span className="text-muted-foreground">
-                              Finished testing
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge
-                              variant="outline"
-                              className="bg-red-500/10 text-red-700 border-red-200"
-                            >
-                              Blocked
-                            </Badge>
-                            <span className="text-muted-foreground">
-                              Cannot proceed
-                            </span>
-                          </div>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-                </TableHead>
-                {isAdmin ? (
-                  <TableHead colSpan={4} className="text-center border-l">
-                    <span className="text-xs font-medium">Tester Status</span>
-                  </TableHead>
-                ) : (
-                  <TableHead className="text-center border-l">
-                    <span className="text-xs font-medium">Testers</span>
-                  </TableHead>
-                )}
-                <TableHead colSpan={3} className="text-center border-l">
-                  <span className="text-xs font-medium">Bugs</span>
-                </TableHead>
-                <TableHead className="w-16 text-right border-l">
-                  Action
-                </TableHead>
-              </TableRow>
-              <TableRow className="hover:bg-transparent">
-                <TableHead />
-                <TableHead />
-                <TableHead />
-                <TableHead />
-                {isAdmin ? (
-                  <>
+        {showAllComponents ? (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Please select only the components you intend to test, so that we can
+              get an accurate idea of how much testing each component will receive.
+            </p>
+            <div className="rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">Select</TableHead>
+                    <TableHead>Component</TableHead>
+                    <TableHead className="w-40">Categories</TableHead>
+                    <TableHead className="w-36">
+                      <div className="flex items-center gap-1">
+                        <span>My Status</span>
+                        <Dialog
+                          open={isStatusInfoOpen}
+                          onOpenChange={setIsStatusInfoOpen}
+                        >
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <DialogTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                                  aria-label="View status definitions"
+                                >
+                                  <Info className="h-4 w-4" />
+                                </Button>
+                              </DialogTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent>View status definitions</TooltipContent>
+                          </Tooltip>
+                          <DialogContent className="max-w-4xl max-h-[85vh] overflow-auto">
+                            <DialogHeader>
+                              <DialogTitle>Status definitions</DialogTitle>
+                              <DialogDescription>
+                                What each testing status means.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-3 text-sm">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="bg-muted">
+                                  Not Started
+                                </Badge>
+                                <span className="text-muted-foreground">
+                                  Haven&apos;t begun testing
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge
+                                  variant="outline"
+                                  className="bg-blue-500/10 text-blue-700 border-blue-200"
+                                >
+                                  In Progress
+                                </Badge>
+                                <span className="text-muted-foreground">
+                                  Currently testing
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge
+                                  variant="outline"
+                                  className="bg-green-500/10 text-green-700 border-green-200"
+                                >
+                                  Completed
+                                </Badge>
+                                <span className="text-muted-foreground">
+                                  Finished testing
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge
+                                  variant="outline"
+                                  className="bg-red-500/10 text-red-700 border-red-200"
+                                >
+                                  Blocked
+                                </Badge>
+                                <span className="text-muted-foreground">
+                                  Cannot proceed
+                                </span>
+                              </div>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                    </TableHead>
+                    {isAdmin ? (
+                      <TableHead colSpan={4} className="text-center border-l">
+                        <span className="text-xs font-medium">Tester Status</span>
+                      </TableHead>
+                    ) : (
+                      <TableHead className="text-center border-l">
+                        <span className="text-xs font-medium">Testers</span>
+                      </TableHead>
+                    )}
+                    <TableHead colSpan={3} className="text-center border-l">
+                      <span className="text-xs font-medium">Bugs</span>
+                    </TableHead>
+                    <TableHead className="w-16 text-right border-l">
+                      Action
+                    </TableHead>
+                  </TableRow>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead />
+                    <TableHead />
+                    <TableHead />
+                    <TableHead />
+                    {isAdmin ? (
+                      <>
+                        <TableHead className="text-center border-l w-16 py-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground cursor-default">
+                                <Circle className="h-3 w-3" />
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>Not started</TooltipContent>
+                          </Tooltip>
+                        </TableHead>
+                        <TableHead className="text-center w-16 py-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center justify-center gap-1 text-xs text-blue-600 cursor-default">
+                                <Clock className="h-3 w-3" />
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>In progress</TooltipContent>
+                          </Tooltip>
+                        </TableHead>
+                        <TableHead className="text-center w-16 py-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center justify-center gap-1 text-xs text-green-600 cursor-default">
+                                <CheckCircle2 className="h-3 w-3" />
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>Completed</TooltipContent>
+                          </Tooltip>
+                        </TableHead>
+                        <TableHead className="text-center w-16 py-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center justify-center gap-1 text-xs text-red-600 cursor-default">
+                                <Ban className="h-3 w-3" />
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>Blocked</TooltipContent>
+                          </Tooltip>
+                        </TableHead>
+                      </>
+                    ) : (
+                      <TableHead className="text-center border-l w-20 py-1 text-xs text-muted-foreground">
+                        Total
+                      </TableHead>
+                    )}
                     <TableHead className="text-center border-l w-16 py-1">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground cursor-default">
-                            <Circle className="h-3 w-3" />
+                          <div className="flex items-center justify-center gap-1 text-xs text-orange-600 cursor-default">
+                            <Bug className="h-3 w-3" />
                           </div>
                         </TooltipTrigger>
-                        <TooltipContent>Not started</TooltipContent>
-                      </Tooltip>
-                    </TableHead>
-                    <TableHead className="text-center w-16 py-1">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="flex items-center justify-center gap-1 text-xs text-blue-600 cursor-default">
-                            <Clock className="h-3 w-3" />
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>In progress</TooltipContent>
+                        <TooltipContent>Open bugs</TooltipContent>
                       </Tooltip>
                     </TableHead>
                     <TableHead className="text-center w-16 py-1">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <div className="flex items-center justify-center gap-1 text-xs text-green-600 cursor-default">
-                            <CheckCircle2 className="h-3 w-3" />
+                            <BugOff className="h-3 w-3" />
                           </div>
                         </TooltipTrigger>
-                        <TooltipContent>Completed</TooltipContent>
+                        <TooltipContent>Closed bugs</TooltipContent>
                       </Tooltip>
                     </TableHead>
-                    <TableHead className="text-center w-16 py-1">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="flex items-center justify-center gap-1 text-xs text-red-600 cursor-default">
-                            <Ban className="h-3 w-3" />
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>Blocked</TooltipContent>
-                      </Tooltip>
-                    </TableHead>
-                  </>
-                ) : (
-                  <TableHead className="text-center border-l w-20 py-1 text-xs text-muted-foreground">
-                    Total
-                  </TableHead>
-                )}
-                <TableHead className="text-center border-l w-16 py-1">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="flex items-center justify-center gap-1 text-xs text-orange-600 cursor-default">
-                        <Bug className="h-3 w-3" />
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>Open bugs</TooltipContent>
-                  </Tooltip>
-                </TableHead>
-                <TableHead className="text-center w-16 py-1">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="flex items-center justify-center gap-1 text-xs text-green-600 cursor-default">
-                        <BugOff className="h-3 w-3" />
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>Closed bugs</TooltipContent>
-                  </Tooltip>
-                </TableHead>
-                <TableHead className="w-10 text-center" />
-                <TableHead className="border-l" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {components.map((component) => {
-                const userStatus = getStatus(component.id);
-                const isSelected = userStatus?.is_selected ?? false;
-                const status = (userStatus?.status ??
-                  "not_started") as ComponentStatus;
-                const config = statusConfig[status];
+                    <TableHead className="w-10 text-center" />
+                    <TableHead className="border-l" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {components.map((component) => {
+                    const userStatus = getStatus(component.id);
+                    const isSelected = userStatus?.is_selected ?? false;
+                    const status = (userStatus?.status ??
+                      "not_started") as ComponentStatus;
+                    const config = statusConfig[status];
 
-                const compStatusCounts = stats.statusCounts[component.id] || {
-                  not_started: 0,
-                  in_progress: 0,
-                  completed: 0,
-                  blocked: 0,
-                };
-                const compBugCounts = stats.bugCounts[component.id] || {
-                  open: 0,
-                  closed: 0,
-                };
-                const totalTesters =
-                  compStatusCounts.not_started +
-                  compStatusCounts.in_progress +
-                  compStatusCounts.completed +
-                  compStatusCounts.blocked;
+                    const compStatusCounts = stats.statusCounts[component.id] || {
+                      not_started: 0,
+                      in_progress: 0,
+                      completed: 0,
+                      blocked: 0,
+                    };
+                    const compBugCounts = stats.bugCounts[component.id] || {
+                      open: 0,
+                      closed: 0,
+                    };
+                    const totalTesters =
+                      compStatusCounts.not_started +
+                      compStatusCounts.in_progress +
+                      compStatusCounts.completed +
+                      compStatusCounts.blocked;
 
-                return (
-                  <TableRow
-                    key={component.id}
-                    className={cn(
-                      isSelected && "bg-primary/5",
-                      !isSelected && "opacity-80",
-                    )}
-                  >
-                    <TableCell>
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={(checked) =>
-                          handleSelectToggle(component.id, checked === true)
-                        }
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{component.name}</div>
-                        <div className="text-sm text-muted-foreground line-clamp-1">
-                          {component.description}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {(categoryMap[component.id] || []).map((catId) => {
-                          const cat = categories.find((c) => c.id === catId);
-                          if (!cat) return null;
-                          return (
-                            <span
-                              key={cat.id}
-                              className="px-2 py-0.5 rounded text-xs font-medium border"
-                              style={{
-                                backgroundColor: `${cat.color}1A`,
-                                borderColor: cat.color,
-                                color: cat.color,
-                              }}
-                            >
-                              {cat.name}
-                            </span>
-                          );
-                        })}
-                        {(categoryMap[component.id] || []).length === 0 && (
-                          <span className="text-xs text-muted-foreground">
-                            None
-                          </span>
+                    return (
+                      <TableRow
+                        key={component.id}
+                        className={cn(
+                          isSelected && "bg-primary/5",
+                          !isSelected && "opacity-80",
                         )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Select
-                        value={status}
-                        onValueChange={(value) =>
-                          handleStatusChange(
-                            component.id,
-                            value as ComponentStatus,
-                          )
-                        }
-                        disabled={!isSelected}
                       >
-                        <SelectTrigger
-                          className={cn(
-                            "h-8 text-xs w-[140px]",
-                            config.selectClassName,
-                          )}
-                          disabled={!isSelected}
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(statusConfig).map(
-                            ([key, { label, icon: Icon }]) => (
-                              <SelectItem key={key} value={key}>
-                                <div className="flex items-center gap-1.5">
-                                  <Icon className="h-3 w-3" />
-                                  {label}
-                                </div>
-                              </SelectItem>
-                            ),
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    {isAdmin ? (
-                      <>
-                        <TableCell className="text-center border-l tabular-nums text-sm text-muted-foreground">
-                          {compStatusCounts.not_started || "-"}
+                        <TableCell>
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(checked) =>
+                              handleSelectToggle(component.id, checked === true)
+                            }
+                          />
                         </TableCell>
-                        <TableCell className="text-center tabular-nums text-sm text-blue-600">
-                          {compStatusCounts.in_progress || "-"}
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{component.name}</div>
+                            <div className="text-sm text-muted-foreground line-clamp-1">
+                              {component.description}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {(categoryMap[component.id] || []).map((catId) => {
+                              const cat = categories.find((c) => c.id === catId);
+                              if (!cat) return null;
+                              return (
+                                <span
+                                  key={cat.id}
+                                  className="px-2 py-0.5 rounded text-xs font-medium border"
+                                  style={{
+                                    backgroundColor: `${cat.color}1A`,
+                                    borderColor: cat.color,
+                                    color: cat.color,
+                                  }}
+                                >
+                                  {cat.name}
+                                </span>
+                              );
+                            })}
+                            {(categoryMap[component.id] || []).length === 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                None
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={status}
+                            onValueChange={(value) =>
+                              handleStatusChange(
+                                component.id,
+                                value as ComponentStatus,
+                              )
+                            }
+                            disabled={!isSelected}
+                          >
+                            <SelectTrigger
+                              className={cn(
+                                "h-8 text-xs w-[140px]",
+                                config.selectClassName,
+                              )}
+                              disabled={!isSelected}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(statusConfig).map(
+                                ([key, { label, icon: Icon }]) => (
+                                  <SelectItem key={key} value={key}>
+                                    <div className="flex items-center gap-1.5">
+                                      <Icon className="h-3 w-3" />
+                                      {label}
+                                    </div>
+                                  </SelectItem>
+                                ),
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        {isAdmin ? (
+                          <>
+                            <TableCell className="text-center border-l tabular-nums text-sm text-muted-foreground">
+                              {compStatusCounts.not_started || "-"}
+                            </TableCell>
+                            <TableCell className="text-center tabular-nums text-sm text-blue-600">
+                              {compStatusCounts.in_progress || "-"}
+                            </TableCell>
+                            <TableCell className="text-center tabular-nums text-sm text-green-600">
+                              {compStatusCounts.completed || "-"}
+                            </TableCell>
+                            <TableCell className="text-center tabular-nums text-sm text-red-600">
+                              {compStatusCounts.blocked || "-"}
+                            </TableCell>
+                          </>
+                        ) : (
+                          <TableCell className="text-center border-l tabular-nums text-sm">
+                            {totalTesters > 0 ? (
+                              <span className="text-muted-foreground">
+                                {totalTesters}
+                              </span>
+                            ) : (
+                              <span className="text-xs font-semibold text-red-600">
+                                Needs testers!
+                              </span>
+                            )}
+                          </TableCell>
+                        )}
+                        <TableCell className="text-center border-l tabular-nums text-sm">
+                          {compBugCounts.open > 0 ? (
+                            <span className="text-orange-600 font-medium">
+                              {compBugCounts.open}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-center tabular-nums text-sm text-green-600">
-                          {compStatusCounts.completed || "-"}
+                          {compBugCounts.closed || "-"}
                         </TableCell>
-                        <TableCell className="text-center tabular-nums text-sm text-red-600">
-                          {compStatusCounts.blocked || "-"}
+                        <TableCell className="text-center">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Link
+                                href={`/testing/${component.id}#report`}
+                                className={cn(
+                                  !isSelected && "pointer-events-none opacity-50",
+                                )}
+                              >
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 w-8 p-0"
+                                >
+                                  +
+                                </Button>
+                              </Link>
+                            </TooltipTrigger>
+                            <TooltipContent>report bug</TooltipContent>
+                          </Tooltip>
                         </TableCell>
-                      </>
-                    ) : (
-                      <TableCell className="text-center border-l tabular-nums text-sm">
-                        {totalTesters > 0 ? (
-                          <span className="text-muted-foreground">
-                            {totalTesters}
-                          </span>
-                        ) : (
-                          <span className="text-xs font-semibold text-red-600">
-                            Needs testers!
-                          </span>
-                        )}
-                      </TableCell>
-                    )}
-                    <TableCell className="text-center border-l tabular-nums text-sm">
-                      {compBugCounts.open > 0 ? (
-                        <span className="text-orange-600 font-medium">
-                          {compBugCounts.open}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center tabular-nums text-sm text-green-600">
-                      {compBugCounts.closed || "-"}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
+                        <TableCell className="text-right border-l">
                           <Link
-                            href={`/testing/${component.id}#report`}
+                            href={`/testing/${component.id}#guides`}
                             className={cn(
+                              "inline-flex items-center gap-1 text-sm text-primary hover:underline",
                               !isSelected && "pointer-events-none opacity-50",
                             )}
                           >
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                            >
-                              +
-                            </Button>
+                            Resources
+                            <ExternalLink className="h-3 w-3" />
                           </Link>
-                        </TooltipTrigger>
-                        <TooltipContent>report bug</TooltipContent>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell className="text-right border-l">
-                      <Link
-                        href={`/testing/${component.id}#guides`}
-                        className={cn(
-                          "inline-flex items-center gap-1 text-sm text-primary hover:underline",
-                          !isSelected && "pointer-events-none opacity-50",
-                        )}
-                      >
-                        Resources
-                        <ExternalLink className="h-3 w-3" />
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            All components are hidden. Use “Show all components” to view the table.
+          </p>
+        )}
       </div>
     </div>
   );

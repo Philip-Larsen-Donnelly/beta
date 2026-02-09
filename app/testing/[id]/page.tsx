@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation"
 import { requireProfile } from "@/lib/auth"
 import { query } from "@/lib/db"
 import { ComponentDetailView } from "@/components/component-detail-view"
+import { fetchResourcesForComponent } from "@/lib/data"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft } from "lucide-react"
@@ -47,9 +48,15 @@ export default async function ComponentTestingPage({
   const userStatus = userStatusRows[0] ?? null
 
   const { rows: bugs } = await query(
-    "SELECT * FROM bugs WHERE component_id = $1 ORDER BY created_at DESC",
+    `SELECT b.*,
+            (SELECT COUNT(*)::int FROM bug_votes bv WHERE bv.bug_id = b.id) AS vote_count
+     FROM bugs b
+     WHERE b.component_id = $1
+     ORDER BY b.created_at DESC`,
     [id],
   )
+
+  const resources = await fetchResourcesForComponent(id)
 
   // Fetch profiles for bug authors
   const userIds = [...new Set((bugs || []).map((b) => b.user_id))]
@@ -91,6 +98,7 @@ export default async function ComponentTestingPage({
         component={component}
         userStatus={userStatus}
         bugs={bugsWithProfiles}
+        resources={resources}
         userId={profile.id}
         isAdmin={isAdmin}
       />

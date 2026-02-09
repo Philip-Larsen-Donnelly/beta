@@ -4,13 +4,21 @@ import type React from "react"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Circle, Clock, CheckCircle2, Ban, Bug } from "lucide-react"
 import { updateComponentStatus } from "@/lib/actions"
-import type { Component, UserComponentStatus, ComponentStatus, Bug as BugType } from "@/lib/types"
+import type {
+  Component,
+  UserComponentStatus,
+  ComponentStatus,
+  Bug as BugType,
+  ComponentResource,
+} from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { BugSubmissionForm } from "@/components/bug-submission-form"
 import { BugList } from "@/components/bug-list"
@@ -50,11 +58,19 @@ interface ComponentDetailViewProps {
   component: Component
   userStatus: UserComponentStatus | null
   bugs: (BugType & { profile: { display_name: string | null; email: string | null } | null })[]
+  resources: ComponentResource[]
   userId: string
   isAdmin: boolean
 }
 
-export function ComponentDetailView({ component, userStatus, bugs, userId, isAdmin }: ComponentDetailViewProps) {
+export function ComponentDetailView({
+  component,
+  userStatus,
+  bugs,
+  resources,
+  userId,
+  isAdmin,
+}: ComponentDetailViewProps) {
   const router = useRouter()
   const [status, setStatus] = useState<ComponentStatus>(userStatus?.status ?? "not_started")
   const [showReportModal, setShowReportModal] = useState(false)
@@ -62,6 +78,17 @@ export function ComponentDetailView({ component, userStatus, bugs, userId, isAdm
   const config = statusConfig[status]
 
   const myBugs = bugs.filter((bug) => bug.user_id === userId)
+  const testpadResources = resources.filter((resource) => resource.type === "testpad")
+  const videoResources = resources.filter((resource) => resource.type === "video")
+  const markdownResources = resources.filter((resource) => resource.type === "markdown")
+
+  const resourceBadgeClass = (type: ComponentResource["type"]) =>
+    cn(
+      "text-xs hover:bg-muted/60 cursor-pointer",
+      type === "testpad" && "bg-blue-500/10 text-blue-700 border-blue-200",
+      type === "video" && "bg-purple-500/10 text-purple-700 border-purple-200",
+      type === "markdown" && "bg-muted text-muted-foreground",
+    )
 
   const handleStatusChange = async (newStatus: ComponentStatus) => {
     setStatus(newStatus)
@@ -109,13 +136,102 @@ export function ComponentDetailView({ component, userStatus, bugs, userId, isAdm
         {/* Left Column - Guides */}
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">Guides</h2>
-          <Card>
+          <Card
+            className={
+              !component.guides_markdown
+                ? "border-dashed bg-muted/30 shadow-none"
+                : undefined
+            }
+          >
             <CardContent className="pt-4">
               {component.guides_markdown ? (
                 <MarkdownContent content={component.guides_markdown} />
               ) : (
                 <p className="text-sm text-muted-foreground">No testing guidelines available for this component.</p>
               )}
+            </CardContent>
+          </Card>
+          <h2 className="text-lg font-semibold">Resources</h2>
+          <Card
+            className={
+              testpadResources.length === 0 &&
+              videoResources.length === 0 &&
+              markdownResources.length === 0
+                ? "border-dashed bg-muted/30 shadow-none"
+                : undefined
+            }
+          >
+            <CardContent className="pt-4 space-y-4">
+              {testpadResources.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">
+                    This component has premade test steps - Use them here...
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {testpadResources.map((resource) => (
+                      <Badge
+                        key={resource.id}
+                        asChild
+                        variant="outline"
+                        className={resourceBadgeClass(resource.type)}
+                      >
+                        <Link href={`/testing/resources/${resource.id}`}>
+                          {resource.name}
+                        </Link>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {videoResources.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Screencasts and feature demos
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {videoResources.map((resource) => (
+                      <Badge
+                        key={resource.id}
+                        asChild
+                        variant="outline"
+                        className={resourceBadgeClass(resource.type)}
+                      >
+                        <Link href={`/testing/resources/${resource.id}`}>
+                          {resource.name}
+                        </Link>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {markdownResources.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Other useful resources
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {markdownResources.map((resource) => (
+                      <Badge
+                        key={resource.id}
+                        asChild
+                        variant="outline"
+                        className={resourceBadgeClass(resource.type)}
+                      >
+                        <Link href={`/testing/resources/${resource.id}`}>
+                          {resource.name}
+                        </Link>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {testpadResources.length === 0 &&
+                videoResources.length === 0 &&
+                markdownResources.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    No resources added for this component yet.
+                  </p>
+                )}
             </CardContent>
           </Card>
         </div>

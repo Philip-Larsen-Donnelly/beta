@@ -102,7 +102,7 @@ export default async function CampaignTestingPage({
     if (!bugCounts[b.component_id]) {
       bugCounts[b.component_id] = { open: 0, closed: 0 };
     }
-    if (b.status === "open" || b.status === "reviewed") {
+    if (b.status === "open" || b.status === "reported") {
       bugCounts[b.component_id].open += 1;
     } else {
       bugCounts[b.component_id].closed += 1;
