@@ -44,12 +44,14 @@ export interface Bug {
   severity: BugSeverity
   priority: BugPriority
   status: BugStatus
+  bug_number: number | null
   created_at: string
   updated_at: string
   // Joined fields
   component?: Component
   profile?: Profile
   vote_count?: number
+  campaign_code?: string | null
 }
 
 export interface BugComment {
@@ -70,6 +72,7 @@ export interface BugVote {
 export interface Campaign {
   id: string
   name: string
+  code: string | null
   description: string | null
   start_date: string | null
   end_date: string | null

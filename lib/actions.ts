@@ -14,10 +14,38 @@ export async function submitBug(data: {
   priority: BugPriority
   isAdmin?: boolean
 }) {
+  // Get the campaign_id for this component to compute the next bug_number
+  const { rows: compRows } = await query<{ campaign_id: string | null }>(
+    "SELECT campaign_id FROM components WHERE id = $1",
+    [data.componentId],
+  )
+  const campaignId = compRows[0]?.campaign_id ?? null
+
+  // Get next bug_number for this campaign (or globally if no campaign)
+  let nextNumber = 1
+  if (campaignId) {
+    const { rows: maxRows } = await query<{ max_num: number | null }>(
+      `SELECT MAX(b.bug_number) AS max_num
+       FROM bugs b
+       JOIN components c ON c.id = b.component_id
+       WHERE c.campaign_id = $1`,
+      [campaignId],
+    )
+    nextNumber = (maxRows[0]?.max_num ?? 0) + 1
+  } else {
+    const { rows: maxRows } = await query<{ max_num: number | null }>(
+      `SELECT MAX(b.bug_number) AS max_num
+       FROM bugs b
+       LEFT JOIN components c ON c.id = b.component_id
+       WHERE c.campaign_id IS NULL`,
+    )
+    nextNumber = (maxRows[0]?.max_num ?? 0) + 1
+  }
+
   await query(
-    `INSERT INTO bugs (component_id, user_id, title, description, severity, priority, status)
-     VALUES ($1, $2, $3, $4, $5, $6, 'open')`,
-    [data.componentId, data.userId, data.title, data.description, data.severity, data.priority],
+    `INSERT INTO bugs (component_id, user_id, title, description, severity, priority, status, bug_number)
+     VALUES ($1, $2, $3, $4, $5, $6, 'open', $7)`,
+    [data.componentId, data.userId, data.title, data.description, data.severity, data.priority, nextNumber],
   )
   revalidatePath("/testing")
   revalidatePath("/testing/campaign")
@@ -118,16 +146,17 @@ export async function updateBug(id: string, updates: Partial<Bug>) {
 
 export async function createCampaign(data: {
   name: string
+  code: string | null
   description: string
   start_date: string | null
   end_date: string | null
   details: string | null
 }) {
   const { rows } = await query(
-    `INSERT INTO campaigns (name, description, start_date, end_date, details)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO campaigns (name, code, description, start_date, end_date, details)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [data.name, data.description, data.start_date, data.end_date, data.details],
+    [data.name, data.code, data.description, data.start_date, data.end_date, data.details],
   )
   return { success: true, campaign: rows[0] }
 }
@@ -136,6 +165,7 @@ export async function updateCampaign(
   id: string,
   data: {
     name: string
+    code: string | null
     description: string
     start_date: string | null
     end_date: string | null
@@ -145,14 +175,15 @@ export async function updateCampaign(
   const { rows } = await query(
     `UPDATE campaigns
      SET name = $1,
-         description = $2,
-         start_date = $3,
-         end_date = $4,
-         details = $5,
+         code = $2,
+         description = $3,
+         start_date = $4,
+         end_date = $5,
+         details = $6,
          updated_at = NOW()
-     WHERE id = $6
+     WHERE id = $7
      RETURNING *`,
-    [data.name, data.description, data.start_date, data.end_date, data.details, id],
+    [data.name, data.code, data.description, data.start_date, data.end_date, data.details, id],
   )
   return { success: true, campaign: rows[0] }
 }
@@ -305,6 +336,49 @@ export async function deleteUsers(userIds: string[]) {
 export async function adminChangeUserPassword(userId: string, newPassword: string) {
   const hashed = await hashPassword(newPassword)
   await query("UPDATE profiles SET password_hash = $1, updated_at = NOW() WHERE id = $2", [hashed, userId])
+  return { success: true }
+}
+
+export async function updateOwnProfile(data: {
+  email?: string
+  display_name?: string
+  organisation?: string
+}) {
+  const profile = await requireProfile()
+  const fields: string[] = []
+  const values: unknown[] = []
+
+  if (data.email !== undefined) {
+    const email = data.email.trim().toLowerCase()
+    if (!email) return { success: false, error: "Email is required" }
+    // Check uniqueness (exclude current user)
+    const { rows: existing } = await query(
+      "SELECT id FROM profiles WHERE email = $1 AND id != $2",
+      [email, profile.id],
+    )
+    if (existing.length > 0) return { success: false, error: "Email is already in use by another account" }
+    fields.push(`email = $${fields.length + 1}`)
+    values.push(email)
+  }
+
+  if (data.display_name !== undefined) {
+    fields.push(`display_name = $${fields.length + 1}`)
+    values.push(data.display_name.trim() || null)
+  }
+
+  if (data.organisation !== undefined) {
+    fields.push(`organisation = $${fields.length + 1}`)
+    values.push(data.organisation.trim() || null)
+  }
+
+  if (fields.length === 0) return { success: true }
+
+  values.push(profile.id)
+  await query(
+    `UPDATE profiles SET ${fields.join(", ")}, updated_at = NOW() WHERE id = $${values.length}`,
+    values,
+  )
+  revalidatePath("/settings")
   return { success: true }
 }
 

@@ -299,7 +299,7 @@ export function AdminComponentList({
                   <TableCell>
                   <div>
                       <div className="font-medium">{component.name}</div>
-                  <div className="text-sm text-muted-foreground line-clamp-1">{component.description}</div>
+                  <div className="text-sm text-muted-foreground whitespace-normal break-words">{component.description}</div>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {(selectedCategories[component.id] || []).map((catId) => {
                       const cat = categories.find((c) => c.id === catId)

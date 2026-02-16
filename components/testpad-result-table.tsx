@@ -94,7 +94,7 @@ type TestpadResultTableProps = {
 }
 
 function buildTsv(rows: TestpadRow[]) {
-  const header = ["Step", "Text", "Pass", "Fail", "Blocked"]
+  const header = ["Step", "Action", "Pass", "Fail", "Blocked"]
   const lines = rows.map((row) => {
     const indentPrefix = row.indent > 0 ? "  ".repeat(row.indent) : ""
     const text = `'${indentPrefix}${row.text}`
@@ -166,7 +166,7 @@ export function TestpadResultTable({
       <TableHeader>
         <TableRow>
           <TableHead className="w-20">Step</TableHead>
-          <TableHead className="max-w-[420px]">Text</TableHead>
+          <TableHead className="max-w-[420px]">Action</TableHead>
           <TableHead className="text-center" colSpan={3}>
             Result
           </TableHead>

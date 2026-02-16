@@ -611,7 +611,7 @@ export function ComponentList({
                         <TableCell>
                           <div>
                             <div className="font-medium">{component.name}</div>
-                            <div className="text-sm text-muted-foreground line-clamp-1">
+                            <div className="text-sm text-muted-foreground line-clamp-2 whitespace-normal break-words max-w-prose">
                               {component.description}
                             </div>
                           </div>

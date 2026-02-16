@@ -131,8 +131,64 @@ function parseCsvLine(line: string): string[] {
   return values
 }
 
+/**
+ * Split CSV content into logical records, handling multi-line quoted values.
+ * A quoted value can span multiple lines — we need to join those lines into
+ * a single record before passing to parseCsvLine.
+ */
+function splitCsvRecords(content: string): string[] {
+  const rawLines = content.split(/\r?\n/)
+  const records: string[] = []
+  let pending = ""
+  let openQuotes = false
+
+  for (const line of rawLines) {
+    if (openQuotes) {
+      pending += "\n" + line
+    } else {
+      pending = line
+    }
+
+    // Count unescaped quotes to determine if we're inside a quoted field
+    let quotes = 0
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '"') {
+        if (i + 1 < line.length && line[i + 1] === '"') {
+          i++ // skip escaped quote
+        } else {
+          quotes++
+        }
+      }
+    }
+
+    if (openQuotes) {
+      // If odd number of quotes, the open quote is now closed
+      if (quotes % 2 === 1) {
+        openQuotes = false
+      }
+    } else {
+      // If odd number of quotes, a quoted field is left open
+      if (quotes % 2 === 1) {
+        openQuotes = true
+      }
+    }
+
+    if (!openQuotes) {
+      records.push(pending)
+      pending = ""
+    }
+  }
+
+  // If there's a dangling record, push it anyway
+  if (pending) {
+    records.push(pending)
+  }
+
+  return records
+}
+
 function parseTestpad(content: string) {
-  const lines = content.split(/\r?\n/)
+  const lines = splitCsvRecords(content)
   let inScript = false
   let name = ""
   let description = ""

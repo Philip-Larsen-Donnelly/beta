@@ -144,7 +144,7 @@ export default async function CampaignTestingPage({
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Campaign Details</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="text-sm text-muted-foreground">
             <MarkdownContent content={campaign.details} />
           </CardContent>
         </Card>

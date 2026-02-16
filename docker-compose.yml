@@ -7,8 +7,6 @@ services:
       POSTGRES_USER: beta
       POSTGRES_PASSWORD: beta
       POSTGRES_DB: beta
-    ports:
-      - "5432:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
@@ -28,14 +26,14 @@ services:
       DATABASE_SSL: "false"
       PORT: 3000
       HOSTNAME: 0.0.0.0
-    expose:
-      - "3000"
+      COOKIE_SECURE: ${TRAEFIK_TLS_ENABLED:-true}
     volumes:
       - uploads-data:/app/public/uploads
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.beta.rule=Host(`${APP_HOST:-localhost}`)"
       - "traefik.http.routers.beta.entrypoints=web,websecure"
+      - "traefik.http.routers.beta.tls=${TRAEFIK_TLS_ENABLED:-true}"
       - "traefik.http.routers.beta.tls.certresolver=le"
       - "traefik.http.services.beta.loadbalancer.server.port=3000"
 
@@ -45,6 +43,8 @@ services:
     user: "0:0"
     group_add:
       - "988"
+    environment:
+      APP_HOST: ${APP_HOST:-localhost}
     command:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"

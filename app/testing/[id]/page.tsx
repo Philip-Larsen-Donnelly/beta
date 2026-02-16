@@ -47,6 +47,11 @@ export default async function ComponentTestingPage({
   )
   const userStatus = userStatusRows[0] ?? null
 
+  // Get the campaign code for bug references
+  const campaignCode = component.campaign
+    ? (await query<{ code: string | null }>("SELECT code FROM campaigns WHERE id = $1", [component.campaign.id])).rows[0]?.code ?? null
+    : null
+
   const { rows: bugs } = await query(
     `SELECT b.*,
             (SELECT COUNT(*)::int FROM bug_votes bv WHERE bv.bug_id = b.id) AS vote_count
@@ -77,9 +82,10 @@ export default async function ComponentTestingPage({
     )
   }
 
-  // Merge bugs with profile data
+  // Merge bugs with profile data and campaign code
   const bugsWithProfiles = (bugs || []).map((bug) => ({
     ...bug,
+    campaign_code: campaignCode,
     profile: profilesMap[bug.user_id] || null,
   }))
 

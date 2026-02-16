@@ -16,10 +16,10 @@ const contentTypes: Record<string, string> = {
 
 export async function GET(
   _req: Request,
-  { params }: { params: { path: string[] } },
+  { params }: { params: Promise<{ path: string[] }> },
 ) {
   try {
-    const segments = params.path || []
+    const { path: segments = [] } = await params
     const filePath = path.join(uploadsRoot, ...segments)
     const resolved = path.resolve(filePath)
 

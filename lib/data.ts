@@ -103,11 +103,13 @@ export async function fetchAdminCounts() {
 
 export async function fetchBugsWithRelations(): Promise<BugWithRelations[]> {
   const { rows } = await query<
-    Bug & { component_name: string | null; profile_display_name: string | null; profile_email: string | null }
+    Bug & { component_name: string | null; campaign_code: string | null; profile_display_name: string | null; profile_email: string | null }
   >(
-    `SELECT b.*, c.name AS component_name, p.display_name AS profile_display_name, p.email AS profile_email
+    `SELECT b.*, c.name AS component_name, camp.code AS campaign_code,
+            p.display_name AS profile_display_name, p.email AS profile_email
      FROM bugs b
      LEFT JOIN components c ON c.id = b.component_id
+     LEFT JOIN campaigns camp ON camp.id = c.campaign_id
      LEFT JOIN profiles p ON p.id = b.user_id
      ORDER BY b.created_at DESC`,
   )
@@ -121,6 +123,8 @@ export async function fetchBugsWithRelations(): Promise<BugWithRelations[]> {
     severity: row.severity as BugSeverity,
     priority: row.priority as BugPriority,
     status: row.status as BugStatus,
+    bug_number: row.bug_number,
+    campaign_code: row.campaign_code,
     created_at: row.created_at,
     updated_at: row.updated_at,
     component: row.component_name ? { name: row.component_name } : null,

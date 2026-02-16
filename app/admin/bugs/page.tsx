@@ -19,6 +19,7 @@ export default async function AdminBugsPage() {
                 c.name AS component_name,
                 c.campaign_id AS component_campaign_id,
                 camp.name AS campaign_name,
+                camp.code AS campaign_code,
                 p.display_name AS profile_display_name,
                 p.email AS profile_email,
                 (SELECT COUNT(*)::int FROM bug_votes bv WHERE bv.bug_id = b.id) AS vote_count
@@ -40,6 +41,7 @@ export default async function AdminBugsPage() {
     bugs =
       bugsResult.rows?.map((b) => ({
         ...b,
+        campaign_code: b.campaign_code ?? null,
         component: b.component_id
           ? { name: b.component_name, campaign_id: b.component_campaign_id, campaign: { name: b.campaign_name } }
           : null,

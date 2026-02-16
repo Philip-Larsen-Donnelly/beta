@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
 import type { Bug, BugSeverity, BugPriority, BugStatus } from "@/lib/types"
-import { cn } from "@/lib/utils"
+import { cn, formatBugRef, bugPermalink } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 import { Bug as BugIcon, Eye, Pencil } from "lucide-react"
 import { updateBug } from "@/lib/actions"
@@ -90,7 +90,7 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
     setViewMode("view")
   }
 
-  const handleSaveEdit = async () => {
+  const saveBug = async () => {
     if (!editingBug) return
     setIsSubmitting(true)
 
@@ -107,8 +107,12 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
 
     await updateBug(editingBug.id, updates)
     setIsSubmitting(false)
-    setEditingBug(null)
     onBugUpdated()
+  }
+
+  const handleSaveEdit = async () => {
+    await saveBug()
+    setEditingBug(null)
   }
 
   useEffect(() => {
@@ -277,15 +281,23 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
               <CardContent className="py-2.5 px-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-medium truncate">{bug.title}</h3>
+                    <div className="flex items-start gap-2 mb-1.5">
+                      {formatBugRef(bug.bug_number, bug.campaign_code) && (
+                        <a
+                          href={bugPermalink(bug.bug_number, bug.campaign_code) || "#"}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-mono text-xs text-muted-foreground hover:text-primary shrink-0 mt-0.5"
+                        >
+                          {formatBugRef(bug.bug_number, bug.campaign_code)}
+                        </a>
+                      )}
+                      <h3 className="text-sm font-medium">{bug.title}</h3>
                       {isOwnBug && (
-                        <Badge variant="outline" className="text-xs shrink-0">
+                        <Badge variant="outline" className="text-xs shrink-0 mt-0.5">
                           Yours
                         </Badge>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground line-clamp-2 mb-1.5">{bug.description}</p>
                     <div className="flex flex-wrap items-center gap-1.5">
                       <div className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                         <span className="font-medium">Status</span>
@@ -342,11 +354,11 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
         <TableHeader>
           <TableRow>
             <TableHead>Title</TableHead>
-            <TableHead>Reporter</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Severity</TableHead>
-            <TableHead>Priority</TableHead>
-            <TableHead className="text-right">Reported</TableHead>
+            <TableHead className="whitespace-nowrap">Reporter</TableHead>
+            <TableHead className="whitespace-nowrap">Status</TableHead>
+            <TableHead className="whitespace-nowrap">Severity</TableHead>
+            <TableHead className="whitespace-nowrap">Priority</TableHead>
+            <TableHead className="text-right whitespace-nowrap">Reported</TableHead>
             <TableHead className="w-[50px]"></TableHead>
           </TableRow>
         </TableHeader>
@@ -357,18 +369,25 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
 
             return (
               <TableRow key={bug.id} className={cn(isOwnBug && "bg-primary/5")}>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium block max-w-[260px] truncate">
+                <TableCell className="max-w-[300px]">
+                  <div className="flex items-start gap-2">
+                    {formatBugRef(bug.bug_number, bug.campaign_code) && (
+                      <a
+                        href={bugPermalink(bug.bug_number, bug.campaign_code) || "#"}
+                        className="font-mono text-xs text-muted-foreground hover:text-primary shrink-0 mt-0.5"
+                      >
+                        {formatBugRef(bug.bug_number, bug.campaign_code)}
+                      </a>
+                    )}
+                    <span className="text-sm font-medium break-words whitespace-normal">
                       {bug.title}
                     </span>
                     {isOwnBug && (
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className="text-xs shrink-0 mt-0.5">
                         Yours
                       </Badge>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground line-clamp-1 max-w-[300px]">{bug.description}</p>
                 </TableCell>
                 <TableCell className="text-sm">
                   <div className="flex items-center gap-2">
@@ -433,7 +452,16 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
             <DialogHeader>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex min-w-0 flex-1 items-center gap-2">
-                  <BugIcon className="h-5 w-5 text-muted-foreground" />
+                  <BugIcon className="h-5 w-5 text-muted-foreground shrink-0" />
+                  {formatBugRef(editingBug?.bug_number, editingBug?.campaign_code) && (
+                    <a
+                      href={bugPermalink(editingBug?.bug_number, editingBug?.campaign_code) || "#"}
+                      className="font-mono text-sm text-muted-foreground hover:text-primary shrink-0"
+                      title="Open bug permalink"
+                    >
+                      {formatBugRef(editingBug?.bug_number, editingBug?.campaign_code)}
+                    </a>
+                  )}
                   {isEditingEnabled ? (
                     <Input
                       id="edit-title"
@@ -446,23 +474,30 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
                   )}
                 </div>
                 {canEditFields && (
-                  <div className="inline-flex w-fit rounded-md border bg-muted/30 p-1 mr-6">
+                  <div className="inline-flex w-fit rounded-md border border-primary/30 bg-primary/5 p-1 mr-6">
                   <Button
                     type="button"
-                    variant={viewMode === "edit" ? "secondary" : "ghost"}
+                    variant={viewMode === "edit" ? "default" : "ghost"}
                     size="sm"
-                    className="h-7 px-3"
+                    className={cn("h-8 px-4 gap-1.5 font-medium", viewMode !== "edit" && "text-muted-foreground")}
                     onClick={() => setViewMode("edit")}
                   >
+                    <Pencil className="h-3.5 w-3.5" />
                     Edit
                   </Button>
                   <Button
                     type="button"
-                    variant={viewMode === "view" ? "secondary" : "ghost"}
+                    variant={viewMode === "view" ? "default" : "ghost"}
                     size="sm"
-                    className="h-7 px-3"
-                    onClick={() => setViewMode("view")}
+                    className={cn("h-8 px-4 gap-1.5 font-medium", viewMode !== "view" && "text-muted-foreground")}
+                    onClick={async () => {
+                      if (viewMode === "edit") {
+                        await saveBug()
+                      }
+                      setViewMode("view")
+                    }}
                   >
+                    <Eye className="h-3.5 w-3.5" />
                     View
                   </Button>
                   </div>

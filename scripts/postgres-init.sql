@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 CREATE TABLE IF NOT EXISTS campaigns (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
+  code TEXT,
   description TEXT,
   start_date DATE,
   end_date DATE,
@@ -71,6 +72,7 @@ CREATE TABLE IF NOT EXISTS bugs (
   severity TEXT DEFAULT 'medium' CHECK (severity IN ('low', 'medium', 'high', 'critical')),
   priority TEXT DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
   status TEXT DEFAULT 'open' CHECK (status IN ('open', 'reported', 'closed', 'fixed')),
+  bug_number INT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

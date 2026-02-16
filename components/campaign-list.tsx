@@ -100,14 +100,21 @@ export function CampaignList({ campaigns, componentCounts }: CampaignListProps) 
                   )}
                 >
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      {status.active ? (
-                        <FolderOpen className="h-5 w-5" />
-                      ) : (
-                        <Lock className="h-5 w-5 text-muted-foreground" />
+                    <div className="flex items-start justify-between gap-2">
+                      <CardTitle className="flex items-center gap-2">
+                        {status.active ? (
+                          <FolderOpen className="h-5 w-5" />
+                        ) : (
+                          <Lock className="h-5 w-5 text-muted-foreground" />
+                        )}
+                        {campaign.name}
+                      </CardTitle>
+                      {campaign.code && (
+                        <span className="font-mono text-xs text-muted-foreground rounded border px-1.5 py-0.5 shrink-0">
+                          {campaign.code}
+                        </span>
                       )}
-                      {campaign.name}
-                    </CardTitle>
+                    </div>
                     {campaign.description && <CardDescription>{campaign.description}</CardDescription>}
                   </CardHeader>
                   <CardContent className="space-y-2">

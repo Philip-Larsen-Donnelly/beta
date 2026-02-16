@@ -75,6 +75,7 @@ export function AdminCampaignList({ campaigns: initialCampaigns, componentCounts
   const handleSave = async (
     data: {
       name: string
+      code: string | null
       description: string
       start_date: string | null
       end_date: string | null
@@ -141,7 +142,12 @@ export function AdminCampaignList({ campaigns: initialCampaigns, componentCounts
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                  <CardTitle className="text-base">{campaign.name}</CardTitle>
+                  <CardTitle className="text-base">
+                    {campaign.code && (
+                      <span className="text-muted-foreground font-mono mr-1.5">{campaign.code}</span>
+                    )}
+                    {campaign.name}
+                  </CardTitle>
                       <Badge variant={statusVariant} className="h-5 px-2 text-[11px] font-medium">
                         {statusIcon}
                         {statusIcon && <span className="ml-1" />}
@@ -215,6 +221,7 @@ interface CampaignFormProps {
   initialData?: Campaign
   onSave: (data: {
     name: string
+    code: string | null
     description: string
     start_date: string | null
     end_date: string | null
@@ -225,6 +232,7 @@ interface CampaignFormProps {
 
 function CampaignForm({ initialData, onSave, onCancel }: CampaignFormProps) {
   const [name, setName] = useState(initialData?.name || "")
+  const [code, setCode] = useState(initialData?.code || "")
   const [description, setDescription] = useState(initialData?.description || "")
   const [startDate, setStartDate] = useState(initialData?.start_date || "")
   const [endDate, setEndDate] = useState(initialData?.end_date || "")
@@ -234,6 +242,7 @@ function CampaignForm({ initialData, onSave, onCancel }: CampaignFormProps) {
     e.preventDefault()
     onSave({
       name,
+      code: code.trim().toUpperCase() || null,
       description,
       start_date: startDate || null,
       end_date: endDate || null,
@@ -243,9 +252,22 @@ function CampaignForm({ initialData, onSave, onCancel }: CampaignFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid gap-1.5">
-        <Label htmlFor="name">Name</Label>
-        <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
+      <div className="grid grid-cols-[1fr,auto] gap-4">
+        <div className="grid gap-1.5">
+          <Label htmlFor="name">Name</Label>
+          <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="code">Code</Label>
+          <Input
+            id="code"
+            value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            placeholder="e.g. V43"
+            className="w-24 uppercase"
+          />
+          <p className="text-xs text-muted-foreground">Bug ID prefix</p>
+        </div>
       </div>
 
       <div className="grid gap-1.5">

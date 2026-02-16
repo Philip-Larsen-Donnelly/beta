@@ -4,7 +4,7 @@ import type React from "react"
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Bug, BookOpen, LayoutGrid, Settings, LogOut, User, KeyRound, Award } from "lucide-react"
+import { Bug, BookOpen, LayoutGrid, Settings, LogOut, User, Award } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -106,8 +106,8 @@ export function AppShell({ children, user, isAdmin = false }: AppShellProps) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link href="/settings" className="cursor-pointer">
-                    <KeyRound className="mr-2 h-4 w-4" />
-                    Change Password
+                    <User className="mr-2 h-4 w-4" />
+                    Profile & Settings
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

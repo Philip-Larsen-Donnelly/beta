@@ -44,17 +44,23 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# Create non-root user
-RUN addgroup -g 1001 nodejs && adduser -D -G nodejs -u 1001 nodeuser
-USER nodeuser
+# Create non-root user & install su-exec for privilege drop
+RUN addgroup -g 1001 nodejs && adduser -D -G nodejs -u 1001 nodeuser \
+ && apk add --no-cache su-exec
+
 WORKDIR /app
 
 # Copy only the compiled app for a smaller, safer image
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next ./.next
-COPY --from=prod-deps /app/node_modules ./node_modules
-COPY --from=prod-deps /app/package.json /app/package-lock.json* ./
+COPY --from=builder --chown=nodeuser:nodejs /app/public ./public
+COPY --from=builder --chown=nodeuser:nodejs /app/.next ./.next
+COPY --from=prod-deps --chown=nodeuser:nodejs /app/node_modules ./node_modules
+COPY --from=prod-deps --chown=nodeuser:nodejs /app/package.json /app/package-lock.json* ./
+
+# Entrypoint fixes volume permissions then drops to nodeuser
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 3000
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["npm", "run", "start"]
 

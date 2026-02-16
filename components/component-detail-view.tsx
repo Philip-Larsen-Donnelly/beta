@@ -268,17 +268,19 @@ export function ComponentDetailView({
 
       {/* Report Bug Modal */}
       <Dialog open={showReportModal} onOpenChange={setShowReportModal}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Submit a Bug Report</DialogTitle>
             <DialogDescription>Found an issue? Report it here</DialogDescription>
           </DialogHeader>
-          <BugSubmissionForm
-            componentId={component.id}
-            userId={userId}
-            onSubmitted={handleBugSubmitted}
-            isAdmin={isAdmin}
-          />
+          <div className="overflow-auto flex-1 space-y-4 py-4">
+            <BugSubmissionForm
+              componentId={component.id}
+              userId={userId}
+              onSubmitted={handleBugSubmitted}
+              isAdmin={isAdmin}
+            />
+          </div>
         </DialogContent>
       </Dialog>
     </div>

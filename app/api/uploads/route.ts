@@ -39,7 +39,6 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(await file.arrayBuffer())
     await fs.writeFile(targetPath, buffer)
     await fs.chmod(targetPath, 0o664)
-    await fs.chmod(targetPath, 0o664)
 
     return NextResponse.json({ url: `/uploads/bugs/${filename}` })
   } catch (err) {

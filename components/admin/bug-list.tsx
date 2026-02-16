@@ -22,7 +22,7 @@ import {
 import { Search, Trash2, Link2, MoreHorizontal, AlertTriangle } from "lucide-react"
 import { updateBug, deleteBug, deleteBugs, attachBugToComponent, attachBugsToComponent } from "@/lib/actions"
 import type { Bug, BugStatus, BugSeverity, BugPriority } from "@/lib/types"
-import { cn, formatDateTime } from "@/lib/utils"
+import { cn, formatDateTime, formatBugRef, bugPermalink } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 
 const severityConfig: Record<string, string> = {
@@ -448,9 +448,20 @@ export function AdminBugList({
                     />
                   </TableCell>
                   <TableCell onClick={() => setSelectedBug(bug)}>
-                    <span className="font-medium block max-w-[260px] truncate">
-                      {bug.title}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {formatBugRef(bug.bug_number, bug.campaign_code) && (
+                        <a
+                          href={bugPermalink(bug.bug_number, bug.campaign_code) || "#"}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-mono text-xs text-muted-foreground hover:text-primary shrink-0"
+                        >
+                          {formatBugRef(bug.bug_number, bug.campaign_code)}
+                        </a>
+                      )}
+                      <span className="text-sm font-medium block max-w-[260px] break-words whitespace-normal">
+                        {bug.title}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell onClick={() => setSelectedBug(bug)} className="text-sm text-muted-foreground">
                     {bug.component?.campaign?.name || "—"}
@@ -527,7 +538,18 @@ export function AdminBugList({
           {selectedBug && (
             <>
               <DialogHeader>
-                <DialogTitle>{selectedBug.title}</DialogTitle>
+                <DialogTitle>
+                  {formatBugRef(selectedBug.bug_number, selectedBug.campaign_code) && (
+                    <a
+                      href={bugPermalink(selectedBug.bug_number, selectedBug.campaign_code) || "#"}
+                      className="font-mono text-sm text-muted-foreground hover:text-primary mr-2"
+                      title="Open bug permalink"
+                    >
+                      {formatBugRef(selectedBug.bug_number, selectedBug.campaign_code)}
+                    </a>
+                  )}
+                  {selectedBug.title}
+                </DialogTitle>
                 <DialogDescription>
                   {selectedBug.component ? (
                     <>
