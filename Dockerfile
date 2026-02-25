@@ -19,11 +19,6 @@ RUN if [ -f package-lock.json ]; then \
 FROM deps AS builder
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-# Provide DATABASE_URL/SSL at build time so Next can statically generate routes that access it.
-ARG DATABASE_URL=postgres://beta:beta@db:5432/beta
-ARG DATABASE_SSL=false
-ENV DATABASE_URL=${DATABASE_URL}
-ENV DATABASE_SSL=${DATABASE_SSL}
 COPY . .
 RUN npm run build
 

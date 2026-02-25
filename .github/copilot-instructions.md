@@ -12,12 +12,12 @@ This file gives concise, project-specific guidance for an AI coding agent to be 
 - Lint: `npm run lint` ([package.json](../package.json)).
 - Build (local): `npm run build` then `npm run start` for production.
 - Docker image build (example):
-  - `docker build --build-arg DATABASE_URL="postgres://beta:beta@db:5432/beta" --build-arg DATABASE_SSL=false -t beta-app:latest .`
+  - `docker build -t beta-app:latest .`
   - `docker-compose up --build` uses `docker-compose.yml` to start `db`, `app`, and `traefik`.
 
 ## Important environment variables
 - `DATABASE_URL` — required by `lib/db.ts`; code throws if missing (see [lib/db.ts](../lib/db.ts)).
-- `DATABASE_SSL` — set to `true`/`false`; used by DB pool and passed at build time in `Dockerfile`.
+- `DATABASE_SSL` — set to `true`/`false`; used by DB pool at runtime.
 - `PORT`, `HOSTNAME` — app runtime settings (Dockerfile and `docker-compose.yml`).
 - `APP_HOST` — used in Traefik labels in `docker-compose.yml` to set host routing.
 - See `env.example` for a minimal example ([env.example](../env.example)).
@@ -28,7 +28,7 @@ This file gives concise, project-specific guidance for an AI coding agent to be 
 
 ## Key implementation patterns
 - Server-side DB access: `lib/db.ts` exports a `pool` and `query()` helper — always expect `DATABASE_URL` in env.
-- Next build-time data: Dockerfile passes `DATABASE_URL`/`DATABASE_SSL` as build-args because some routes may be statically generated at build time.
+- DB configuration is runtime-only in Docker; provide `DATABASE_URL`/`DATABASE_SSL` via environment at container runtime.
 - UI organization: reusable primitives in `/components/ui/*`; page-level code is in `/app` and `/app/*/page.tsx`.
 - SQL and DB changes: prefer adding SQL files to `/scripts` rather than editing the DB directly.
 
@@ -39,7 +39,7 @@ This file gives concise, project-specific guidance for an AI coding agent to be 
 
 ## Project-specific gotchas to watch for
 - The repo includes a `pnpm-lock.yaml` but the `Dockerfile` expects `package-lock.json`/npm — builds fallback to `npm install` if no `package-lock.json` exists. Confirm the intended package manager before changing CI/builds.
-- `lib/db.ts` will throw at runtime if `DATABASE_URL` is not set — set envs for build or runtime accordingly.
+- `lib/db.ts` will throw at runtime if `DATABASE_URL` is not set — ensure runtime env is configured.
 - Build tooling (Tailwind/PostCSS) is required at build time; Dockerfile intentionally installs dev dependencies in `deps` stage.
 
 ## Where to look for further context
@@ -50,6 +50,6 @@ This file gives concise, project-specific guidance for an AI coding agent to be 
 - SQL scripts: `/scripts`.
 
 ## When you need clarification
-- Ask the maintainers about: preferred package manager (`npm` vs `pnpm`), CI/deploy steps (no `.github/workflows` detected), and whether build-time DB access is expected for all environments.
+- Ask the maintainers about: preferred package manager (`npm` vs `pnpm`) and CI/deploy steps (no `.github/workflows` detected).
 
 If you want, I can update this with CI/CD steps or add examples for local DB seeding and a minimal dev-compose override.

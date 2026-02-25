@@ -9,3 +9,5 @@ backup/*
 .vscode/settings.json
 test-resources/*
 public/*
+.github/instructions/*
+.github/agents/*
