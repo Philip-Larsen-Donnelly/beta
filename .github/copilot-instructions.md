@@ -23,7 +23,7 @@ This file gives concise, project-specific guidance for an AI coding agent to be 
 - See `env.example` for a minimal example ([env.example](../env.example)).
 
 ## DB / migrations
-- DB schema and seeds are under `/scripts` (e.g. `001_create_tables.sql`, `003_seed_components.sql`).
+- DB schema and seeds are under `/scripts` (e.g. `postgres-init.sql`, `003_seed_components.sql`).
 - `docker-compose.yml` runs Postgres 16; use `docker-compose up db` + `psql` or the app container to run migrations/seeds.
 
 ## Key implementation patterns

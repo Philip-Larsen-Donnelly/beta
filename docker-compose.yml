@@ -8,7 +8,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-beta}
       POSTGRES_DB: ${POSTGRES_DB:-beta}
     volumes:
-      - db-data:/var/lib/postgresql/data
+      - db-dataN:/var/lib/postgresql/data
+      - ./scripts/postgres-init.sql:/docker-entrypoint-initdb.d/00-postgres-init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-beta}"]
       interval: 5s
@@ -28,7 +29,7 @@ services:
       HOSTNAME: 0.0.0.0
       COOKIE_SECURE: ${TRAEFIK_TLS_ENABLED:-true}
     volumes:
-      - uploads-data:/app/public/uploads
+      - uploads-dataN:/app/public/uploads
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.beta.rule=Host(`${APP_HOST:-localhost}`)"
@@ -58,10 +59,10 @@ services:
       - "443:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - traefik-data:/letsencrypt
+      - traefik-dataN:/letsencrypt
 
 volumes:
-  db-data:
-  traefik-data:
-  uploads-data:
+  db-dataN:
+  traefik-dataN:
+  uploads-dataN:
 

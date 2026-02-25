@@ -5,12 +5,14 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email TEXT UNIQUE NOT NULL,
+  email TEXT UNIQUE,
   username TEXT UNIQUE NOT NULL,
   display_name TEXT,
   organisation TEXT,
   password_hash TEXT NOT NULL,
   is_admin BOOLEAN DEFAULT FALSE,
+  is_hisp BOOLEAN DEFAULT FALSE,
+  force_password_change BOOLEAN DEFAULT FALSE NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -116,6 +118,7 @@ CREATE TABLE IF NOT EXISTS bug_votes (
 );
 
 -- Dev seed user (matches MOCK_USER_ID used in UI)
+-- Default local-dev credentials: username=dev password=dev123
 INSERT INTO profiles (id, email, username, display_name, organisation, password_hash, is_admin)
 VALUES (
   '00000000-0000-0000-0000-000000000001',
@@ -123,7 +126,7 @@ VALUES (
   'dev',
   'Dev User',
   'Example Org',
-  '$2a$10$CwTycUXWue0Thq9StjUM0uJ8d7p/8r7V6czS4fFqqTZYBFvToNi4.',
+  '$2a$10$9gppByvYukKRk1tp8BX28.hY1Kw1BEsSWEPrNIKdUu1mji3yftGbK',
   true
 )
 ON CONFLICT (id) DO NOTHING;
@@ -138,7 +141,7 @@ VALUES (
   NULL,
   '## Welcome
 
-- Use this default campaign to organize components and bugs.'
+- Use this is a default campaign to organize components and bugs.'
 )
 ON CONFLICT (id) DO NOTHING;
 
@@ -212,4 +215,15 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   expires_at TIMESTAMPTZ NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS invites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  token TEXT NOT NULL,
+  expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '14 days'),
+  used BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS invites_token_idx ON invites(token);
 
