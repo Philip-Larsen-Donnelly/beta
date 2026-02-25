@@ -37,5 +37,4 @@ pnpm dev
 
 You should then be able to open a browser.
 
-You can leave pnpm dev running and it will rebuild on your (Cursor's) changes. - you probably know that.
-I think that should get you started. (edited) 
+You can leave pnpm dev running and it will rebuild on your changes.
