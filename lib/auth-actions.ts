@@ -8,8 +8,8 @@ export async function signIn(formData: FormData) {
   const username = (formData.get("username") as string).toLowerCase()
   const password = formData.get("password") as string
 
-  const { rows } = await query<{ id: string; password_hash: string }>(
-    "SELECT id, password_hash FROM profiles WHERE username = $1",
+  const { rows } = await query<{ id: string; password_hash: string; force_password_change: boolean }>(
+    "SELECT id, password_hash, force_password_change FROM profiles WHERE username = $1",
     [username],
   )
 
@@ -20,6 +20,9 @@ export async function signIn(formData: FormData) {
   if (!valid) return { error: "Invalid username or password" }
 
   await createSession(user.id)
+  if (user.force_password_change) {
+    redirect("/settings")
+  }
   redirect("/guidelines")
 }
 

@@ -380,11 +380,20 @@ export default async function ResourcePage({
         <Card>
           <CardHeader>
             <div className="flex items-start justify-between gap-4">
-              <CardTitle className="text-base">
-                {parsedTestpad?.name || "Testpad"}
-              </CardTitle>
-              <TestpadCopyButton rows={testpadRows} />
-            </div>
+                <CardTitle className="text-base">
+                  {parsedTestpad?.name || "Testpad"}
+                </CardTitle>
+                <div className="flex items-center">
+                  <div className="border rounded-md p-3 bg-muted/5 text-sm max-w-md">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Run some or all of the test steps here and record results, or copy the steps into your own spreadsheet to adapt and track testing.
+                    </p>
+                    <div className="flex justify-end">
+                      <TestpadCopyButton rows={testpadRows} />
+                    </div>
+                  </div>
+                </div>
+              </div>
             {parsedTestpad?.description && (
               <p className="text-sm text-muted-foreground whitespace-pre-line">
                 {renderLinkedMultilineText(parsedTestpad.description)}

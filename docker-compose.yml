@@ -4,13 +4,13 @@ services:
     image: postgres:16
     restart: unless-stopped
     environment:
-      POSTGRES_USER: beta
-      POSTGRES_PASSWORD: beta
-      POSTGRES_DB: beta
+      POSTGRES_USER: ${POSTGRES_USER:-beta}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-beta}
+      POSTGRES_DB: ${POSTGRES_DB:-beta}
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U beta"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-beta}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -22,7 +22,7 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://beta:beta@db:5432/beta
+      DATABASE_URL: postgres://${POSTGRES_USER:-beta}:${POSTGRES_PASSWORD:-beta}@db:5432/${POSTGRES_DB:-beta}
       DATABASE_SSL: "false"
       PORT: 3000
       HOSTNAME: 0.0.0.0

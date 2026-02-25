@@ -7,10 +7,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { changeOwnPassword } from "@/lib/actions"
+import { changeOwnPassword, setPasswordOnFirstLogin } from "@/lib/actions"
 import { KeyRound, CheckCircle } from "lucide-react"
 
-export function ChangePasswordForm() {
+export function ChangePasswordForm({ forceChange }: { forceChange?: boolean } = {}) {
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -34,7 +34,12 @@ export function ChangePasswordForm() {
     }
 
     setIsLoading(true)
-    const result = await changeOwnPassword(currentPassword, newPassword)
+    let result
+    if (forceChange) {
+      result = await setPasswordOnFirstLogin(newPassword)
+    } else {
+      result = await changeOwnPassword(currentPassword, newPassword)
+    }
 
     if (!result.success) {
       setError(result.error || "Failed to change password")
@@ -60,16 +65,18 @@ export function ChangePasswordForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="currentPassword">Current Password</Label>
-            <Input
-              id="currentPassword"
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              required
-            />
-          </div>
+          {!forceChange && (
+            <div className="space-y-2">
+              <Label htmlFor="currentPassword">Current Password</Label>
+              <Input
+                id="currentPassword"
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                required
+              />
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="newPassword">New Password</Label>
             <Input

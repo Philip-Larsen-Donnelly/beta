@@ -63,6 +63,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { updateComponentSelection, updateComponentStatus } from "@/lib/actions";
+import { CompletionConfirmationDialog } from "@/components/completion-confirmation-dialog";
 import type {
   Component,
   UserComponentStatus,
@@ -143,6 +144,8 @@ export function ComponentList({
 
   const [stats, setStats] = useState(initialStats);
   const [isStatusInfoOpen, setIsStatusInfoOpen] = useState(false);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [pendingCompleteComponentId, setPendingCompleteComponentId] = useState<string | null>(null);
   const [showAllComponents, setShowAllComponents] = useState(() => {
     const hasSelected = components.some(
       (c) => localStatuses[c.id]?.is_selected,
@@ -196,6 +199,13 @@ export function ComponentList({
     componentId: string,
     status: ComponentStatus,
   ) => {
+    // Require confirmation when moving to completed
+    if (status === "completed") {
+      setPendingCompleteComponentId(componentId);
+      setShowCompleteModal(true);
+      return;
+    }
+
     const existing = getStatus(componentId);
     const oldStatus = existing?.status || "not_started";
 
@@ -232,10 +242,57 @@ export function ComponentList({
     }
   };
 
+  const confirmComplete = async () => {
+    if (!pendingCompleteComponentId) return;
+
+    const componentId = pendingCompleteComponentId;
+    const existing = getStatus(componentId);
+    const oldStatus = existing?.status || "not_started";
+
+    const data = await updateComponentStatus({
+      userId,
+      componentId,
+      status: "completed",
+      existingStatusId: existing?.id,
+    });
+
+    setShowCompleteModal(false);
+    setPendingCompleteComponentId(null);
+
+    if (data) {
+      setLocalStatuses((prev) => ({ ...prev, [componentId]: data }));
+
+      if (data.is_selected) {
+        setStats((prev) => {
+          const nextStatusCounts = { ...prev.statusCounts };
+          const counts = {
+            ...(nextStatusCounts[componentId] ?? {
+              not_started: 0,
+              in_progress: 0,
+              completed: 0,
+              blocked: 0,
+            }),
+          };
+
+          counts[oldStatus] = Math.max(0, (counts[oldStatus] || 0) - 1);
+          counts["completed"] = (counts["completed"] || 0) + 1;
+
+          nextStatusCounts[componentId] = counts;
+          return { ...prev, statusCounts: nextStatusCounts };
+        });
+      }
+      router.refresh();
+    }
+  };
+
   // Derive selected components from localStatuses
   const selectedComponents = components.filter(
     (c) => localStatuses[c.id]?.is_selected,
   );
+
+  const pendingComponent = pendingCompleteComponentId
+    ? components.find((c) => c.id === pendingCompleteComponentId)
+    : null;
 
   if (components.length === 0) {
     return (
@@ -762,6 +819,12 @@ export function ComponentList({
           </p>
         )}
       </div>
+      <CompletionConfirmationDialog
+        open={showCompleteModal}
+        onOpenChange={setShowCompleteModal}
+        componentName={pendingComponent?.name ?? "this component"}
+        onConfirm={confirmComplete}
+      />
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button"
 import { Circle, Clock, CheckCircle2, Ban, Bug } from "lucide-react"
 import { updateComponentStatus } from "@/lib/actions"
+import { CompletionConfirmationDialog } from "@/components/completion-confirmation-dialog"
 import type {
   Component,
   UserComponentStatus,
@@ -74,6 +75,7 @@ export function ComponentDetailView({
   const router = useRouter()
   const [status, setStatus] = useState<ComponentStatus>(userStatus?.status ?? "not_started")
   const [showReportModal, setShowReportModal] = useState(false)
+  const [showCompleteModal, setShowCompleteModal] = useState(false)
 
   const config = statusConfig[status]
 
@@ -91,12 +93,30 @@ export function ComponentDetailView({
     )
 
   const handleStatusChange = async (newStatus: ComponentStatus) => {
+    // If switching to completed, require confirmation first
+    if (newStatus === "completed") {
+      setShowCompleteModal(true)
+      return
+    }
+
     setStatus(newStatus)
 
     await updateComponentStatus({
       userId,
       componentId: component.id,
       status: newStatus,
+      existingStatusId: userStatus?.id,
+    })
+  }
+
+  const confirmComplete = async () => {
+    setShowCompleteModal(false)
+    setStatus("completed")
+
+    await updateComponentStatus({
+      userId,
+      componentId: component.id,
+      status: "completed",
       existingStatusId: userStatus?.id,
     })
   }
@@ -129,6 +149,12 @@ export function ComponentDetailView({
             ))}
           </SelectContent>
         </Select>
+        <CompletionConfirmationDialog
+          open={showCompleteModal}
+          onOpenChange={setShowCompleteModal}
+          componentName={component.name}
+          onConfirm={confirmComplete}
+        />
       </div>
 
       {/* Two-column layout */}
@@ -165,7 +191,7 @@ export function ComponentDetailView({
               {testpadResources.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-muted-foreground">
-                    This component has premade test steps - Use them here...
+                    This component has premade test examples to follow or use as inspiration for your own tests
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {testpadResources.map((resource) => (

@@ -30,14 +30,14 @@ import {
 } from "@/components/ui/dialog"
 import { Trash2, Shield, Search, ArrowUpDown, ArrowUp, ArrowDown, KeyRound } from "lucide-react"
 import type { Profile } from "@/lib/types"
-import { updateUser, deleteUser, deleteUsers, adminChangeUserPassword } from "@/lib/actions"
+import { updateUser, deleteUser, deleteUsers, createUsers, createInviteForProfile } from "@/lib/actions"
 import { formatDateTime } from "@/lib/utils"
 
 interface AdminUserListProps {
   users: Profile[]
 }
 
-type SortField = "username" | "email" | "organisation" | "created_at" | "is_admin"
+type SortField = "username" | "email" | "organisation" | "created_at" | "is_admin" | "is_hisp"
 type SortDirection = "asc" | "desc"
 type FilterType = "all" | "admin" | "user"
 
@@ -57,9 +57,24 @@ export function AdminUserList({ users: initialUsers }: AdminUserListProps) {
 
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
   const [userForPassword, setUserForPassword] = useState<Profile | null>(null)
-  const [newPassword, setNewPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
   const [passwordError, setPasswordError] = useState("")
+  const [passwordResetLink, setPasswordResetLink] = useState("")
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [bulkMode, setBulkMode] = useState(false)
+  const [newUserUsername, setNewUserUsername] = useState("")
+  const [newUserEmail, setNewUserEmail] = useState("")
+  const [newUserOrganisation, setNewUserOrganisation] = useState("")
+  const [bulkText, setBulkText] = useState("")
+  const [createError, setCreateError] = useState("")
+  const [createLoading, setCreateLoading] = useState(false)
+  const [newUserIsAdmin, setNewUserIsAdmin] = useState(false)
+  const [newUserIsHisp, setNewUserIsHisp] = useState(false)
+  const [newUserCreateInvite, setNewUserCreateInvite] = useState(true)
+  const [createdResults, setCreatedResults] = useState<
+    { username: string; email: string; password: string; success: boolean; error?: string; user?: Profile }[]
+  >([])
+  const [resultDialogOpen, setResultDialogOpen] = useState(false)
+  const [showBulkHelp, setShowBulkHelp] = useState(false)
 
   const filteredAndSortedUsers = useMemo(() => {
     let result = [...users]
@@ -108,6 +123,10 @@ export function AdminUserList({ users: initialUsers }: AdminUserListProps) {
         case "is_admin":
           aVal = a.is_admin
           bVal = b.is_admin
+          break
+        case "is_hisp":
+          aVal = a.is_hisp
+          bVal = b.is_hisp
           break
       }
 
@@ -197,31 +216,37 @@ export function AdminUserList({ users: initialUsers }: AdminUserListProps) {
     if (!userForPassword) return
 
     setPasswordError("")
-
-    if (newPassword.length < 6) {
-      setPasswordError("Password must be at least 6 characters")
-      return
-    }
-
-    if (newPassword !== confirmPassword) {
-      setPasswordError("Passwords do not match")
-      return
-    }
+    setPasswordResetLink("")
 
     setIsLoading(true)
-    const result = await adminChangeUserPassword(userForPassword.id, newPassword)
+    const result = await createInviteForProfile(userForPassword.id)
 
     if (!result.success) {
-      setPasswordError(result.error || "Failed to change password")
+      setPasswordError(result.error || "Failed to create reset link")
       setIsLoading(false)
       return
     }
 
+    const token = result.invite?.token
+    if (!token) {
+      setPasswordError("Failed to create reset link")
+      setIsLoading(false)
+      return
+    }
+
+    const origin = typeof window !== "undefined" ? window.location.origin : ""
+    setPasswordResetLink(origin ? `${origin}/auth/invite/${token}` : token)
+
     setIsLoading(false)
-    setPasswordDialogOpen(false)
-    setUserForPassword(null)
-    setNewPassword("")
-    setConfirmPassword("")
+  }
+
+  const handleToggleHisp = async (user: Profile) => {
+    const newIsHisp = !user.is_hisp
+    setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, is_hisp: newIsHisp } : u)))
+    const result = await updateUser(user.id, { is_hisp: newIsHisp })
+    if (!result.success) {
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, is_hisp: !newIsHisp } : u)))
+    }
   }
 
   const adminCount = users.filter((u) => u.is_admin).length
@@ -249,6 +274,7 @@ export function AdminUserList({ users: initialUsers }: AdminUserListProps) {
               <SelectItem value="user">Non-Admins</SelectItem>
             </SelectContent>
           </Select>
+          <Button onClick={() => setAddDialogOpen(true)}>Add User</Button>
         </div>
       </div>
 
@@ -317,13 +343,22 @@ export function AdminUserList({ users: initialUsers }: AdminUserListProps) {
                   <SortIcon field="is_admin" />
                 </button>
               </TableHead>
+              <TableHead className="text-center">
+                <button
+                  onClick={() => toggleSort("is_hisp")}
+                  className="flex items-center justify-center font-medium hover:text-foreground w-full"
+                >
+                  HISP
+                  <SortIcon field="is_hisp" />
+                </button>
+              </TableHead>
               <TableHead className="w-24"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredAndSortedUsers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                   No users found
                 </TableCell>
               </TableRow>
@@ -342,14 +377,22 @@ export function AdminUserList({ users: initialUsers }: AdminUserListProps) {
                           Admin
                         </Badge>
                       )}
+                      {user.is_hisp && (
+                        <Badge variant="secondary" className="text-xs">
+                          HISP
+                        </Badge>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">{user.email || "—"}</TableCell>
                   <TableCell className="text-muted-foreground">{user.organisation || "—"}</TableCell>
                   <TableCell className="text-muted-foreground">{formatDateTime(user.created_at)}</TableCell>
-                  <TableCell className="text-center">
-                    <Switch checked={user.is_admin} onCheckedChange={() => handleToggleAdmin(user)} />
-                  </TableCell>
+                      <TableCell className="text-center">
+                        <Switch checked={user.is_admin} onCheckedChange={() => handleToggleAdmin(user)} />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Switch checked={user.is_hisp} onCheckedChange={() => handleToggleHisp(user)} />
+                      </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <Button
@@ -359,9 +402,8 @@ export function AdminUserList({ users: initialUsers }: AdminUserListProps) {
                         title="Change password"
                         onClick={() => {
                           setUserForPassword(user)
-                          setNewPassword("")
-                          setConfirmPassword("")
                           setPasswordError("")
+                          setPasswordResetLink("")
                           setPasswordDialogOpen(true)
                         }}
                       >
@@ -415,7 +457,7 @@ export function AdminUserList({ users: initialUsers }: AdminUserListProps) {
             <AlertDialogAction
               onClick={handleDeleteUser}
               disabled={isLoading}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-white hover:bg-destructive/90"
             >
               {isLoading ? "Deleting..." : "Delete"}
             </AlertDialogAction>
@@ -438,7 +480,7 @@ export function AdminUserList({ users: initialUsers }: AdminUserListProps) {
             <AlertDialogAction
               onClick={handleBulkDelete}
               disabled={isLoading}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-white hover:bg-destructive/90"
             >
               {isLoading ? "Deleting..." : "Delete All"}
             </AlertDialogAction>
@@ -449,44 +491,298 @@ export function AdminUserList({ users: initialUsers }: AdminUserListProps) {
       <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[85vh] overflow-auto">
           <DialogHeader>
-            <DialogTitle>Change Password</DialogTitle>
+            <DialogTitle>Create Reset Link</DialogTitle>
             <DialogDescription>
-              Set a new password for{" "}
+              Generate a one-time reset link for{" "}
               <span className="font-medium">
                 {userForPassword?.username || userForPassword?.display_name || userForPassword?.email}
               </span>
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="newPassword">New Password</Label>
-              <Input
-                id="newPassword"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Minimum 6 characters"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-enter password"
-              />
-            </div>
+            {passwordResetLink && (
+              <div className="space-y-2">
+                <Label htmlFor="passwordResetLink">Reset Link</Label>
+                <div className="flex items-center gap-2">
+                  <Input id="passwordResetLink" value={passwordResetLink} readOnly />
+                  <Button
+                    onClick={() => {
+                      try {
+                        navigator.clipboard.writeText(passwordResetLink)
+                      } catch (e) {
+                        // ignore
+                      }
+                    }}
+                    disabled={!passwordResetLink}
+                  >
+                    Copy Link
+                  </Button>
+                </div>
+              </div>
+            )}
             {passwordError && <p className="text-sm text-destructive">{passwordError}</p>}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPasswordDialogOpen(false)} disabled={isLoading}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPasswordDialogOpen(false)
+                setUserForPassword(null)
+                setPasswordResetLink("")
+                setPasswordError("")
+              }}
+              disabled={isLoading}
+            >
               Cancel
             </Button>
-            <Button onClick={handleChangePassword} disabled={isLoading || !newPassword || !confirmPassword}>
-              {isLoading ? "Changing..." : "Change Password"}
+            <Button onClick={handleChangePassword} disabled={isLoading}>
+              {isLoading ? "Generating..." : "Generate Reset Link"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add Users</DialogTitle>
+            <DialogDescription>
+              Create a single user or paste multiple users (one per line) as CSV: username,email[,organisation]
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="flex items-center gap-4">
+              <Label>Mode</Label>
+              <Select value={bulkMode ? "bulk" : "single"} onValueChange={(v) => setBulkMode(v === "bulk")}> 
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="single">Single</SelectItem>
+                  <SelectItem value="bulk">Bulk (CSV lines)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+                  {!bulkMode ? (
+              <div className="grid gap-2">
+                <Label htmlFor="addUsername">Username</Label>
+                <Input id="addUsername" value={newUserUsername} onChange={(e) => setNewUserUsername(e.target.value)} />
+
+                    <Label htmlFor="addEmail">Email (optional)</Label>
+                    <Input id="addEmail" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} />
+
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <Switch checked={newUserIsAdmin} onCheckedChange={(v) => setNewUserIsAdmin(!!v)} />
+                        <span className="text-sm">Admin</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch checked={newUserIsHisp} onCheckedChange={(v) => setNewUserIsHisp(!!v)} />
+                        <span className="text-sm">HISP</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch checked={newUserCreateInvite} onCheckedChange={(v) => setNewUserCreateInvite(!!v)} />
+                        <span className="text-sm">Create invite link (copyable)</span>
+                      </div>
+                    </div>
+
+                    <Label htmlFor="addOrganisation">Organisation (optional)</Label>
+                    <Input id="addOrganisation" value={newUserOrganisation} onChange={(e) => setNewUserOrganisation(e.target.value)} />
+              </div>
+            ) : (
+                <div className="grid gap-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="bulkText">Bulk users</Label>
+                    <Button variant="ghost" size="sm" onClick={() => setShowBulkHelp((s) => !s)}>
+                      {showBulkHelp ? "Hide help" : "Format help"}
+                    </Button>
+                  </div>
+                  <textarea
+                    id="bulkText"
+                    className="w-full rounded-md border p-2"
+                    rows={8}
+                    value={bulkText}
+                    onChange={(e) => setBulkText(e.target.value)}
+                    placeholder={`one per line: username,email(optional),organisation(optional),is_admin(optional),is_hisp(optional)`}
+                  />
+                  {showBulkHelp && (
+                    <div className="text-sm text-muted-foreground">
+                      Format: <code>username,email(optional),organisation(optional),is_admin(optional),is_hisp(optional)</code> -
+                      example: <code>alice,alice@example.com,OrgName,true,false</code>
+                    </div>
+                  )}
+                </div>
+            )}
+
+            {createError && <p className="text-sm text-destructive">{createError}</p>}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddDialogOpen(false)} disabled={createLoading}>
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                setCreateError("")
+                setCreateLoading(true)
+
+                try {
+                  let payload: any[] = []
+                  if (!bulkMode) {
+                      if (!newUserUsername) {
+                        setCreateError("Username is required")
+                        setCreateLoading(false)
+                        return
+                      }
+                      payload = [
+                        {
+                          username: newUserUsername,
+                          email: newUserEmail || null,
+                          // no password provided; server will generate one
+                          organisation: newUserOrganisation || null,
+                          is_admin: newUserIsAdmin,
+                          is_hisp: newUserIsHisp,
+                        },
+                      ]
+                  } else {
+                    const lines = bulkText.split("\n").map((l) => l.trim()).filter(Boolean)
+                    for (const line of lines) {
+                      const parts = line.split(",").map((p) => p.trim())
+                      if (parts.length < 1) continue
+                      // CSV: username,email(optional),organisation(optional),is_admin(optional),is_hisp(optional)
+                      const isAdmin = parts[3] ? /^(1|true|yes)$/i.test(parts[3]) : false
+                      const isHisp = parts[4] ? /^(1|true|yes)$/i.test(parts[4]) : false
+                      payload.push({ username: parts[0], email: parts[1] || null, organisation: parts[2] || null, is_admin: isAdmin, is_hisp: isHisp })
+                    }
+                    if (payload.length === 0) {
+                      setCreateError("No valid lines found in bulk input")
+                      setCreateLoading(false)
+                      return
+                    }
+                  }
+
+                  const result = await createUsers(payload)
+
+                  if (!result || !result.success) {
+                    setCreateError("Failed to create users")
+                    setCreateLoading(false)
+                    return
+                  }
+
+                  // Map results back to payload so we can show passwords and invite links for successful creations
+                  const results = result.results || []
+                  const mapped = await Promise.all(results.map(async (r: any, idx: number) => {
+                    const base = {
+                      username: payload[idx]?.username,
+                      email: payload[idx]?.email,
+                      password: payload[idx]?.password,
+                      success: !!r.success,
+                      error: r.error,
+                      user: r.user,
+                    }
+                    if (base.success && newUserCreateInvite && r.user && r.user.id) {
+                      try {
+                        const inviteRes = await createInviteForProfile(r.user.id)
+                        if (inviteRes?.success && inviteRes.invite?.token) {
+                          // build a copyable link using current origin
+                          const origin = typeof window !== 'undefined' ? window.location.origin : ''
+                          base['invite_link'] = origin ? `${origin}/auth/invite/${inviteRes.invite.token}` : inviteRes.invite.token
+                        }
+                      } catch (e) {
+                        // ignore invite creation errors, leave invite_link undefined
+                      }
+                    }
+                    return base
+                  }))
+
+                  const created = mapped.filter((m) => m.success).map((m) => m.user)
+                  if (created.length > 0) setUsers((prev) => [...created, ...prev])
+
+                  const errors = mapped.filter((m) => !m.success)
+                  if (errors.length > 0) setCreateError(errors.map((e) => e.error).join(", "))
+
+                  setCreatedResults(mapped)
+                  setResultDialogOpen(true)
+
+                  setCreateLoading(false)
+                  setAddDialogOpen(false)
+                  setNewUserUsername("")
+                  setNewUserEmail("")
+                  setNewUserIsAdmin(false)
+                  setNewUserIsHisp(false)
+                  setNewUserOrganisation("")
+                  setBulkText("")
+                  router.refresh()
+                } catch (e: any) {
+                  setCreateError(e?.message || String(e))
+                  setCreateLoading(false)
+                }
+              }}
+              disabled={createLoading}
+            >
+              {createLoading ? "Creating..." : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={resultDialogOpen} onOpenChange={setResultDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Created Users</DialogTitle>
+            <DialogDescription>
+              Review created accounts and copy passwords to send to users. Passwords are shown only once here.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-4">
+            {createdResults.map((r, i) => (
+              <div key={`${r.username}-${i}`} className="flex items-center justify-between gap-2">
+                <div className="flex-1">
+                  <div className="font-medium">{r.username} {r.success ? <span className="text-sm text-green-600">(created)</span> : <span className="text-sm text-destructive">(failed)</span>}</div>
+                  <div className="text-sm text-muted-foreground">{r.email}</div>
+                  {r.error && <div className="text-sm text-destructive">{r.error}</div>}
+                </div>
+                <div className="flex items-center gap-2">
+                  {r.password && (
+                    <>
+                      <Input value={r.password || ""} readOnly className="w-[260px]" />
+                      <Button
+                        onClick={() => {
+                          try {
+                            navigator.clipboard.writeText(r.password || "")
+                          } catch (e) {
+                            // ignore
+                          }
+                        }}
+                      >
+                        Copy
+                      </Button>
+                    </>
+                  )}
+                  {r.invite_link && (
+                    <>
+                      <Input value={r.invite_link} readOnly className="w-[420px]" />
+                      <Button
+                        onClick={() => {
+                          try {
+                            navigator.clipboard.writeText(r.invite_link || "")
+                          } catch (e) {
+                            // ignore
+                          }
+                        }}
+                      >
+                        Copy Link
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setResultDialogOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

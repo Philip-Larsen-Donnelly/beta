@@ -34,7 +34,7 @@ export default async function SettingsPage() {
               organisation: profile.organisation,
             }}
           />
-          <ChangePasswordForm />
+          <ChangePasswordForm forceChange={!!profile.force_password_change} />
         </div>
       </div>
     </AppShell>
