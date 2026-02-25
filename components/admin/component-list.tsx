@@ -299,7 +299,7 @@ export function AdminComponentList({
                   <TableCell>
                   <div>
                       <div className="font-medium">{component.name}</div>
-                  <div className="text-sm text-muted-foreground line-clamp-1">{component.description}</div>
+                  <div className="text-sm text-muted-foreground whitespace-normal break-words">{component.description}</div>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {(selectedCategories[component.id] || []).map((catId) => {
                       const cat = categories.find((c) => c.id === catId)
@@ -580,7 +580,9 @@ function ComponentForm({ initialData, onSave, onCancel, categoryOptions, selecte
 
   function ResourceForm({ initial, componentId, onSave, onCancel }: ResourceFormProps) {
     const [name, setName] = useState(initial?.name || "")
-    const [type, setType] = useState<"markdown" | "testpad">((initial?.type as any) || "markdown")
+    const [type, setType] = useState<"markdown" | "testpad" | "video">(
+      (initial?.type as any) || "markdown",
+    )
     const [content, setContent] = useState(initial?.content || "")
     const [saving, setSaving] = useState(false)
 
@@ -635,6 +637,7 @@ function ComponentForm({ initialData, onSave, onCancel, categoryOptions, selecte
             <SelectContent>
               <SelectItem value="markdown">markdown</SelectItem>
               <SelectItem value="testpad">testpad</SelectItem>
+              <SelectItem value="video">video</SelectItem>
             </SelectContent>
           </Select>
         </div>

@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 CREATE TABLE IF NOT EXISTS campaigns (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
+  code TEXT,
   description TEXT,
   start_date DATE,
   end_date DATE,
@@ -70,9 +71,48 @@ CREATE TABLE IF NOT EXISTS bugs (
   description TEXT NOT NULL,
   severity TEXT DEFAULT 'medium' CHECK (severity IN ('low', 'medium', 'high', 'critical')),
   priority TEXT DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
-  status TEXT DEFAULT 'open' CHECK (status IN ('open', 'reviewed', 'closed', 'fixed')),
+  status TEXT DEFAULT 'open' CHECK (status IN ('open', 'reported', 'closed', 'fixed')),
+  bug_number INT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS component_resources (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  component_id UUID NOT NULL REFERENCES components(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('testpad', 'markdown', 'video')),
+  content TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS testpad_results (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  campaign_id UUID REFERENCES campaigns(id) ON DELETE CASCADE,
+  component_id UUID NOT NULL REFERENCES components(id) ON DELETE CASCADE,
+  resource_id UUID NOT NULL REFERENCES component_resources(id) ON DELETE CASCADE,
+  step_index INTEGER NOT NULL,
+  result TEXT NOT NULL CHECK (result IN ('pass', 'fail', 'blocked')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, resource_id, step_index)
+);
+
+CREATE TABLE IF NOT EXISTS bug_comments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  bug_id UUID NOT NULL REFERENCES bugs(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS bug_votes (
+  bug_id UUID NOT NULL REFERENCES bugs(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (bug_id, user_id)
 );
 
 -- Dev seed user (matches MOCK_USER_ID used in UI)

@@ -1,7 +1,7 @@
 export type ComponentStatus = "not_started" | "in_progress" | "completed" | "blocked"
 export type BugSeverity = "low" | "medium" | "high" | "critical"
 export type BugPriority = "low" | "medium" | "high"
-export type BugStatus = "open" | "reviewed" | "closed" | "fixed"
+export type BugStatus = "open" | "reported" | "closed" | "fixed"
 
 export interface Profile {
   id: string
@@ -10,6 +10,8 @@ export interface Profile {
   username: string | null
   organisation: string | null
   is_admin: boolean
+  is_hisp: boolean
+  force_password_change?: boolean
   created_at: string
   updated_at: string
 }
@@ -44,16 +46,35 @@ export interface Bug {
   severity: BugSeverity
   priority: BugPriority
   status: BugStatus
+  bug_number: number | null
   created_at: string
   updated_at: string
   // Joined fields
   component?: Component
   profile?: Profile
+  vote_count?: number
+  campaign_code?: string | null
+}
+
+export interface BugComment {
+  id: string
+  bug_id: string
+  user_id: string
+  content: string
+  created_at: string
+  profile?: Profile
+}
+
+export interface BugVote {
+  bug_id: string
+  user_id: string
+  created_at: string
 }
 
 export interface Campaign {
   id: string
   name: string
+  code: string | null
   description: string | null
   start_date: string | null
   end_date: string | null
@@ -72,8 +93,20 @@ export interface ComponentResource {
   id: string
   component_id: string
   name: string
-  type: "testpad" | "markdown"
+  type: "testpad" | "markdown" | "video"
   content: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface TestpadResult {
+  id: string
+  user_id: string
+  campaign_id: string | null
+  component_id: string
+  resource_id: string
+  step_index: number
+  result: "pass" | "fail" | "blocked"
   created_at: string
   updated_at: string
 }

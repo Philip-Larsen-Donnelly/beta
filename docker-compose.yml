@@ -4,15 +4,13 @@ services:
     image: postgres:16
     restart: unless-stopped
     environment:
-      POSTGRES_USER: beta
-      POSTGRES_PASSWORD: beta
-      POSTGRES_DB: beta
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-beta}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-beta}
+      POSTGRES_DB: ${POSTGRES_DB:-beta}
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U beta"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-beta}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -24,16 +22,18 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://beta:beta@db:5432/beta
+      DATABASE_URL: postgres://${POSTGRES_USER:-beta}:${POSTGRES_PASSWORD:-beta}@db:5432/${POSTGRES_DB:-beta}
       DATABASE_SSL: "false"
       PORT: 3000
       HOSTNAME: 0.0.0.0
-    expose:
-      - "3000"
+      COOKIE_SECURE: ${TRAEFIK_TLS_ENABLED:-true}
+    volumes:
+      - uploads-data:/app/public/uploads
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.beta.rule=Host(`${APP_HOST:-localhost}`)"
       - "traefik.http.routers.beta.entrypoints=web,websecure"
+      - "traefik.http.routers.beta.tls=${TRAEFIK_TLS_ENABLED:-true}"
       - "traefik.http.routers.beta.tls.certresolver=le"
       - "traefik.http.services.beta.loadbalancer.server.port=3000"
 
@@ -43,6 +43,8 @@ services:
     user: "0:0"
     group_add:
       - "988"
+    environment:
+      APP_HOST: ${APP_HOST:-localhost}
     command:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
@@ -61,4 +63,5 @@ services:
 volumes:
   db-data:
   traefik-data:
+  uploads-data:
 

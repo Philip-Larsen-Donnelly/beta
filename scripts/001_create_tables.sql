@@ -69,10 +69,37 @@ CREATE TABLE IF NOT EXISTS public.bugs (
   description TEXT NOT NULL,
   severity TEXT DEFAULT 'medium' CHECK (severity IN ('low', 'medium', 'high', 'critical')),
   priority TEXT DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
-  status TEXT DEFAULT 'open' CHECK (status IN ('open', 'reviewed', 'closed', 'fixed')),
+  status TEXT DEFAULT 'open' CHECK (status IN ('open', 'reported', 'closed', 'fixed')),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Bug comments
+CREATE TABLE IF NOT EXISTS public.bug_comments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  bug_id UUID NOT NULL REFERENCES public.bugs(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.bug_comments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "bug_comments_select_all" ON public.bug_comments FOR SELECT USING (true);
+CREATE POLICY "bug_comments_insert_own" ON public.bug_comments FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "bug_comments_delete_own" ON public.bug_comments FOR DELETE USING (auth.uid() = user_id);
+
+-- Bug votes
+CREATE TABLE IF NOT EXISTS public.bug_votes (
+  bug_id UUID NOT NULL REFERENCES public.bugs(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (bug_id, user_id)
+);
+
+ALTER TABLE public.bug_votes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "bug_votes_select_all" ON public.bug_votes FOR SELECT USING (true);
+CREATE POLICY "bug_votes_insert_own" ON public.bug_votes FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "bug_votes_delete_own" ON public.bug_votes FOR DELETE USING (auth.uid() = user_id);
 
 ALTER TABLE public.bugs ENABLE ROW LEVEL SECURITY;
 

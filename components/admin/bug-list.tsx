@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -8,8 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
+import { MarkdownContent } from "@/components/markdown-content"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,7 +22,7 @@ import {
 import { Search, Trash2, Link2, MoreHorizontal, AlertTriangle } from "lucide-react"
 import { updateBug, deleteBug, deleteBugs, attachBugToComponent, attachBugsToComponent } from "@/lib/actions"
 import type { Bug, BugStatus, BugSeverity, BugPriority } from "@/lib/types"
-import { cn, formatDateTime } from "@/lib/utils"
+import { cn, formatDateTime, formatBugRef, bugPermalink } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 
 const severityConfig: Record<string, string> = {
@@ -32,21 +34,45 @@ const severityConfig: Record<string, string> = {
 
 const statusConfig: Record<string, string> = {
   open: "bg-blue-500/10 text-blue-700 border-blue-200",
-  reviewed: "bg-purple-500/10 text-purple-700 border-purple-200",
+  reported: "bg-purple-500/10 text-purple-700 border-purple-200",
   fixed: "bg-emerald-500/10 text-emerald-700 border-emerald-200",
   closed: "bg-muted text-muted-foreground",
 }
 
-interface AdminBugListProps {
-  bugs: (Bug & {
-    component: { name: string; campaign_id: string | null; campaign: { name: string } | null } | null
-    profile: { display_name: string | null; email: string | null } | null
-  })[]
-  components: { id: string; name: string; campaign_id: string | null; campaign: { name: string } | null }[]
-  campaigns: { id: string; name: string; start_date: string | null; end_date: string | null }[]
+const severityOptions = [
+  { value: "low", label: "Low", description: "Minor issue, cosmetic" },
+  { value: "medium", label: "Medium", description: "Feature impaired" },
+  { value: "high", label: "High", description: "Major feature broken" },
+  { value: "critical", label: "Critical", description: "System crash, data loss" },
+] as const
+
+type BugRow = Bug & {
+  component: { name: string; campaign_id: string | null; campaign: { name: string } | null } | null
+  profile: { display_name: string | null; email: string | null } | null
 }
 
-export function AdminBugList({ bugs: initialBugs, components, campaigns }: AdminBugListProps) {
+interface AdminBugListProps {
+  bugs: BugRow[]
+  components: { id: string; name: string; campaign_id: string | null; campaign: { name: string } | null }[]
+  campaigns: { id: string; name: string; start_date: string | null; end_date: string | null }[]
+  currentUserId: string
+}
+
+type BugCommentItem = {
+  id: string
+  bug_id: string
+  user_id: string
+  content: string
+  created_at: string
+  profile: { display_name: string | null; email: string | null } | null
+}
+
+export function AdminBugList({
+  bugs: initialBugs,
+  components,
+  campaigns,
+  currentUserId,
+}: AdminBugListProps) {
   const router = useRouter()
   const [bugs, setBugs] = useState(initialBugs)
   const [search, setSearch] = useState("")
@@ -61,6 +87,12 @@ export function AdminBugList({ bugs: initialBugs, components, campaigns }: Admin
   const [attachTargetCampaign, setAttachTargetCampaign] = useState<string>("")
   const [attachTargetComponent, setAttachTargetComponent] = useState<string>("")
   const [bugsToAttach, setBugsToAttach] = useState<string[]>([])
+  const [comments, setComments] = useState<BugCommentItem[]>([])
+  const [commentsLoading, setCommentsLoading] = useState(false)
+  const [commentText, setCommentText] = useState("")
+  const [commentError, setCommentError] = useState<string | null>(null)
+  const [hasExperienced, setHasExperienced] = useState(false)
+  const [voteCount, setVoteCount] = useState(0)
 
   const isCampaignActive = (campaign: { start_date: string | null; end_date: string | null }) => {
     const today = new Date()
@@ -109,14 +141,85 @@ export function AdminBugList({ bugs: initialBugs, components, campaigns }: Admin
   const handleUpdateBug = async (id: string, updates: Partial<Bug>) => {
     const result = await updateBug(id, updates)
     if (result.success && result.bug) {
-      const updatedBug = {
+      const existingBug = bugs.find((b) => b.id === id)
+      const updatedBug: BugRow = {
         ...result.bug,
-        component: bugs.find((b) => b.id === id)?.component || null,
-        profile: bugs.find((b) => b.id === id)?.profile || null,
+        component: existingBug?.component ?? null,
+        profile: existingBug?.profile ?? null,
       }
-      setBugs(bugs.map((b) => (b.id === id ? updatedBug : b)))
+      setBugs((prev) => prev.map((b) => (b.id === id ? updatedBug : b)))
       setSelectedBug(updatedBug)
       router.refresh()
+    }
+  }
+
+  useEffect(() => {
+    if (!selectedBug) return
+    let mounted = true
+    setComments([])
+    setCommentText("")
+    setCommentError(null)
+    setHasExperienced(false)
+    setVoteCount(0)
+    setCommentsLoading(true)
+
+    Promise.all([
+      fetch(`/api/bug-comments?bugId=${selectedBug.id}`)
+        .then((res) => (res.ok ? res.json() : Promise.reject(res)))
+        .catch(() => []),
+      fetch(`/api/bug-votes?bugId=${selectedBug.id}`)
+        .then((res) => (res.ok ? res.json() : Promise.reject(res)))
+        .catch(() => ({ count: 0, hasVoted: false })),
+    ])
+      .then(([commentRows, vote]) => {
+        if (!mounted) return
+        setComments(commentRows || [])
+        setHasExperienced(Boolean(vote?.hasVoted))
+        setVoteCount(Number(vote?.count ?? 0))
+      })
+      .finally(() => mounted && setCommentsLoading(false))
+
+    return () => {
+      mounted = false
+    }
+  }, [selectedBug?.id])
+
+  const handleAddComment = async () => {
+    if (!selectedBug || !commentText.trim()) return
+    setCommentError(null)
+    try {
+      const res = await fetch("/api/bug-comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bugId: selectedBug.id, content: commentText }),
+      })
+      if (!res.ok) throw new Error("Failed to add comment")
+      const comment = await res.json()
+      setComments((prev) => [...prev, comment])
+      setCommentText("")
+    } catch (error) {
+      setCommentError(
+        error instanceof Error ? error.message : "Failed to add comment",
+      )
+    }
+  }
+
+  const handleToggleExperienced = async (checked: boolean) => {
+    if (!selectedBug) return
+    setHasExperienced(checked)
+    try {
+      const res = await fetch("/api/bug-votes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bugId: selectedBug.id, hasExperienced: checked }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setHasExperienced(Boolean(data?.hasVoted))
+        setVoteCount(Number(data?.count ?? 0))
+      }
+    } catch (error) {
+      console.error("Failed to update bug vote", error)
     }
   }
 
@@ -192,7 +295,7 @@ export function AdminBugList({ bugs: initialBugs, components, campaigns }: Admin
                     campaign: targetComp.campaign,
                   }
                 : null,
-            }
+            } as BugRow
           }
           return b
         }),
@@ -264,7 +367,7 @@ export function AdminBugList({ bugs: initialBugs, components, campaigns }: Admin
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="open">Open</SelectItem>
-            <SelectItem value="reviewed">Reviewed</SelectItem>
+            <SelectItem value="reported">Valid: Reported to JIRA</SelectItem>
             <SelectItem value="fixed">Fixed</SelectItem>
             <SelectItem value="closed">Closed</SelectItem>
           </SelectContent>
@@ -345,7 +448,20 @@ export function AdminBugList({ bugs: initialBugs, components, campaigns }: Admin
                     />
                   </TableCell>
                   <TableCell onClick={() => setSelectedBug(bug)}>
-                    <span className="font-medium">{bug.title}</span>
+                    <div className="flex items-center gap-2">
+                      {formatBugRef(bug.bug_number, bug.campaign_code) && (
+                        <a
+                          href={bugPermalink(bug.bug_number, bug.campaign_code) || "#"}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-mono text-xs text-muted-foreground hover:text-primary shrink-0"
+                        >
+                          {formatBugRef(bug.bug_number, bug.campaign_code)}
+                        </a>
+                      )}
+                      <span className="text-sm font-medium block max-w-[260px] break-words whitespace-normal">
+                        {bug.title}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell onClick={() => setSelectedBug(bug)} className="text-sm text-muted-foreground">
                     {bug.component?.campaign?.name || "—"}
@@ -359,7 +475,14 @@ export function AdminBugList({ bugs: initialBugs, components, campaigns }: Admin
                     )}
                   </TableCell>
                   <TableCell onClick={() => setSelectedBug(bug)} className="text-sm">
-                    {bug.profile?.display_name || bug.profile?.email || "Unknown"}
+                    <div className="flex items-center gap-2">
+                      <span>{bug.profile?.display_name || bug.profile?.email || "Unknown"}</span>
+                      {Number(bug.vote_count ?? 0) > 0 && (
+                        <Badge variant="outline" className="text-sm">
+                          +{bug.vote_count}
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell onClick={() => setSelectedBug(bug)}>
                     <Badge variant="outline" className={cn("text-xs", statusConfig[bug.status])}>
@@ -415,7 +538,18 @@ export function AdminBugList({ bugs: initialBugs, components, campaigns }: Admin
           {selectedBug && (
             <>
               <DialogHeader>
-                <DialogTitle>{selectedBug.title}</DialogTitle>
+                <DialogTitle>
+                  {formatBugRef(selectedBug.bug_number, selectedBug.campaign_code) && (
+                    <a
+                      href={bugPermalink(selectedBug.bug_number, selectedBug.campaign_code) || "#"}
+                      className="font-mono text-sm text-muted-foreground hover:text-primary mr-2"
+                      title="Open bug permalink"
+                    >
+                      {formatBugRef(selectedBug.bug_number, selectedBug.campaign_code)}
+                    </a>
+                  )}
+                  {selectedBug.title}
+                </DialogTitle>
                 <DialogDescription>
                   {selectedBug.component ? (
                     <>
@@ -431,9 +565,15 @@ export function AdminBugList({ bugs: initialBugs, components, campaigns }: Admin
               </DialogHeader>
 
               <div className="space-y-4">
-                <div>
+                <div className="grid gap-1.5">
                   <Label className="text-xs text-muted-foreground">Description</Label>
-                  <p className="text-sm mt-1 whitespace-pre-wrap">{selectedBug.description}</p>
+                  <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                    {selectedBug.description?.trim()?.length ? (
+                      <MarkdownContent content={selectedBug.description} />
+                    ) : (
+                      <p className="text-muted-foreground">No description provided.</p>
+                    )}
+                  </div>
                 </div>
 
                 {selectedBug.component_id === null && (
@@ -467,7 +607,7 @@ export function AdminBugList({ bugs: initialBugs, components, campaigns }: Admin
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="open">Open</SelectItem>
-                        <SelectItem value="reviewed">Reviewed</SelectItem>
+                        <SelectItem value="reported">Valid: Reported to JIRA</SelectItem>
                         <SelectItem value="fixed">Fixed</SelectItem>
                         <SelectItem value="closed">Closed</SelectItem>
                       </SelectContent>
@@ -479,14 +619,23 @@ export function AdminBugList({ bugs: initialBugs, components, campaigns }: Admin
                       value={selectedBug.severity}
                       onValueChange={(v) => handleUpdateBug(selectedBug.id, { severity: v as BugSeverity })}
                     >
-                      <SelectTrigger>
-                        <SelectValue />
+                    <SelectTrigger className="justify-start text-left">
+                      <span>
+                        {severityOptions.find((option) => option.value === selectedBug.severity)?.label ??
+                          "Select severity"}
+                      </span>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="low">Low</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
-                        <SelectItem value="critical">Critical</SelectItem>
+                      {severityOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          <div className="flex flex-col">
+                            <span>{option.label}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {option.description}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -505,6 +654,84 @@ export function AdminBugList({ bugs: initialBugs, components, campaigns }: Admin
                         <SelectItem value="high">High</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                </div>
+
+                <div className="grid gap-2">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded border px-2 py-0.5 text-sm font-semibold">
+                        {voteCount + 1}
+                      </span>
+                      <span className="text-sm text-muted-foreground">reporters</span>
+                    </div>
+                    <Checkbox
+                      checked={hasExperienced}
+                      onCheckedChange={(checked) =>
+                        handleToggleExperienced(checked === true)
+                      }
+                      id="admin-experienced-toggle"
+                      disabled={selectedBug.user_id === currentUserId}
+                    />
+                    <Label htmlFor="admin-experienced-toggle" className="text-sm">
+                      I&apos;ve experienced this bug too
+                    </Label>
+                  </div>
+                  {selectedBug.user_id === currentUserId && (
+                    <p className="text-xs text-muted-foreground">
+                      You reported this bug, so your vote is already counted.
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid gap-3">
+                  <Label>Comments</Label>
+                  {commentsLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading comments...</p>
+                  ) : comments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No comments yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {comments.map((comment) => (
+                        <div key={comment.id} className="rounded-md border px-3 py-2 text-sm">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>
+                              {comment.user_id === currentUserId
+                                ? "You"
+                                : comment.profile?.display_name ||
+                                  comment.profile?.email ||
+                                  "Unknown user"}
+                            </span>
+                            <span>
+                              {formatDistanceToNow(new Date(comment.created_at), {
+                                addSuffix: true,
+                              })}
+                            </span>
+                          </div>
+                          <p className="mt-1 whitespace-pre-line">{comment.content}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {commentError && (
+                    <p className="text-sm text-destructive">{commentError}</p>
+                  )}
+                  <div className="grid gap-2">
+                    <Textarea
+                      id="admin-new-comment"
+                      rows={3}
+                      value={commentText}
+                      onChange={(e) => setCommentText(e.target.value)}
+                      placeholder="Add a comment..."
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleAddComment}
+                      disabled={!commentText.trim()}
+                    >
+                      Add Comment
+                    </Button>
                   </div>
                 </div>
 

@@ -33,3 +33,21 @@ export function formatDateRange(start: string | null, end: string | null): strin
   if (start) return `From ${formatDate(start)}`
   return `Until ${formatDate(end)}`
 }
+
+/**
+ * Format a bug reference string like "V43-001" or "BUG-001"
+ */
+export function formatBugRef(bugNumber: number | null | undefined, campaignCode: string | null | undefined): string | null {
+  if (bugNumber == null) return null
+  const prefix = campaignCode || "BUG"
+  return `${prefix}-${String(bugNumber).padStart(3, "0")}`
+}
+
+/**
+ * Build the permalink path for a bug, e.g. "/bugs/V43-001"
+ */
+export function bugPermalink(bugNumber: number | null | undefined, campaignCode: string | null | undefined): string | null {
+  const ref = formatBugRef(bugNumber, campaignCode)
+  if (!ref) return null
+  return `/bugs/${ref}`
+}

@@ -18,7 +18,7 @@ async function setSessionCookie(token: string, expires: Date) {
     name: SESSION_COOKIE,
     value: token,
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.COOKIE_SECURE !== "false" && process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     expires,

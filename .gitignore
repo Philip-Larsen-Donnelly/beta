@@ -3,3 +3,9 @@
 node_modules
 .next
 *.tar
+backup.sql
+backup/*
+.env.local
+.vscode/settings.json
+test-resources/*
+public/*
