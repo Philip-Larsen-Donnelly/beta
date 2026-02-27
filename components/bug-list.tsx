@@ -29,15 +29,15 @@ type BugCommentItem = {
 
 const severityConfig: Record<string, string> = {
   low: "bg-muted text-muted-foreground",
-  medium: "bg-yellow-500/10 text-yellow-700 border-yellow-200",
-  high: "bg-orange-500/10 text-orange-700 border-orange-200",
-  critical: "bg-red-500/10 text-red-700 border-red-200",
+  medium: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-500/30",
+  high: "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-500/30",
+  critical: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-500/30",
 }
 
 const statusConfig: Record<string, string> = {
-  open: "bg-blue-500/10 text-blue-700 border-blue-200",
-  reported: "bg-purple-500/10 text-purple-700 border-purple-200",
-  fixed: "bg-emerald-500/10 text-emerald-700 border-emerald-200",
+  open: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/30",
+  reported: "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-500/30",
+  fixed: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30",
   closed: "bg-muted text-muted-foreground",
 }
 

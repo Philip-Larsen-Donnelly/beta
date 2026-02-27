@@ -4,7 +4,8 @@ import type React from "react"
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Bug, BookOpen, LayoutGrid, Settings, LogOut, User, Award } from "lucide-react"
+import { useTheme } from "next-themes"
+import { Bug, BookOpen, LayoutGrid, Settings, LogOut, User, Award, Moon, Sun } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -35,6 +36,7 @@ interface AppShellProps {
 
 export function AppShell({ children, user, isAdmin = false }: AppShellProps) {
   const pathname = usePathname()
+  const { setTheme, theme } = useTheme()
 
   const handleLogout = async () => {
     await signOut()
@@ -85,6 +87,19 @@ export function AppShell({ children, user, isAdmin = false }: AppShellProps) {
             </nav>
           </div>
 
+          <div className="flex items-center gap-1">
+          {/* Theme toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          >
+            <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+            <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            <span className="sr-only">Toggle theme</span>
+          </Button>
+
           {/* User menu */}
           {user && (
             <DropdownMenu>
@@ -118,6 +133,7 @@ export function AppShell({ children, user, isAdmin = false }: AppShellProps) {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          </div>
         </div>
       </header>
 

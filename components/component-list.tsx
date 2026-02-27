@@ -93,21 +93,21 @@ const statusConfig: Record<
     label: "In Progress",
     icon: Clock,
     className: "selected-card__status selected-card__status--in-progress",
-    selectClassName: "border-blue-300 bg-blue-500/10 text-blue-700",
+    selectClassName: "border-blue-300 dark:border-blue-700 bg-blue-500/10 text-blue-700 dark:text-blue-400",
     cardClassName: "selected-card--in-progress",
   },
   completed: {
     label: "Completed",
     icon: CheckCircle2,
     className: "selected-card__status selected-card__status--completed",
-    selectClassName: "border-green-300 bg-green-500/10 text-green-700",
+    selectClassName: "border-green-300 dark:border-green-700 bg-green-500/10 text-green-700 dark:text-green-400",
     cardClassName: "selected-card--completed",
   },
   blocked: {
     label: "Blocked",
     icon: Ban,
     className: "selected-card__status selected-card__status--blocked",
-    selectClassName: "border-red-300 bg-red-500/10 text-red-700",
+    selectClassName: "border-red-300 dark:border-red-700 bg-red-500/10 text-red-700 dark:text-red-400",
     cardClassName: "selected-card--blocked",
   },
 };
@@ -497,7 +497,7 @@ export function ComponentList({
                               <div className="flex items-center gap-2">
                                 <Badge
                                   variant="outline"
-                                  className="bg-blue-500/10 text-blue-700 border-blue-200"
+                                  className="bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/30"
                                 >
                                   In Progress
                                 </Badge>
@@ -508,7 +508,7 @@ export function ComponentList({
                               <div className="flex items-center gap-2">
                                 <Badge
                                   variant="outline"
-                                  className="bg-green-500/10 text-green-700 border-green-200"
+                                  className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-500/30"
                                 >
                                   Completed
                                 </Badge>
@@ -519,7 +519,7 @@ export function ComponentList({
                               <div className="flex items-center gap-2">
                                 <Badge
                                   variant="outline"
-                                  className="bg-red-500/10 text-red-700 border-red-200"
+                                  className="bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-500/30"
                                 >
                                   Blocked
                                 </Badge>

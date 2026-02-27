@@ -14,7 +14,6 @@ const securityHeaders = [
       "font-src 'self' data:",
       "connect-src 'self'",
       "frame-src 'none'",
-      "upgrade-insecure-requests",
     ].join('; '),
   },
   {

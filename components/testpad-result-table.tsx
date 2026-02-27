@@ -207,7 +207,7 @@ export function TestpadResultTable({
                       type="button"
                       className={buttonClass(
                         "pass",
-                        "bg-green-500/15 border-green-500/30 text-green-700",
+                        "bg-green-500/15 border-green-500/30 text-green-700 dark:text-green-400",
                       )}
                       onClick={() =>
                         toggleResult(index, selected === "pass" ? null : "pass")
@@ -221,7 +221,7 @@ export function TestpadResultTable({
                       type="button"
                       className={buttonClass(
                         "fail",
-                        "bg-red-500/15 border-red-500/30 text-red-700",
+                        "bg-red-500/15 border-red-500/30 text-red-700 dark:text-red-400",
                       )}
                       onClick={() =>
                         toggleResult(index, selected === "fail" ? null : "fail")
@@ -235,7 +235,7 @@ export function TestpadResultTable({
                       type="button"
                       className={buttonClass(
                         "blocked",
-                        "bg-amber-500/15 border-amber-500/30 text-amber-700",
+                        "bg-amber-500/15 border-amber-500/30 text-amber-700 dark:text-amber-400",
                       )}
                       onClick={() =>
                         toggleResult(

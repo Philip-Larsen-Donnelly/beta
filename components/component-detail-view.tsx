@@ -38,20 +38,20 @@ const statusConfig: Record<
   in_progress: {
     label: "In Progress",
     icon: Clock,
-    className: "bg-blue-500/10 text-blue-700 border-blue-200",
-    selectClassName: "border-blue-300 bg-blue-500/10 text-blue-700",
+    className: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/30",
+    selectClassName: "border-blue-300 dark:border-blue-700 bg-blue-500/10 text-blue-700 dark:text-blue-400",
   },
   completed: {
     label: "Completed",
     icon: CheckCircle2,
-    className: "bg-green-500/10 text-green-700 border-green-200",
-    selectClassName: "border-green-300 bg-green-500/10 text-green-700",
+    className: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-500/30",
+    selectClassName: "border-green-300 dark:border-green-700 bg-green-500/10 text-green-700 dark:text-green-400",
   },
   blocked: {
     label: "Blocked",
     icon: Ban,
-    className: "bg-red-500/10 text-red-700 border-red-200",
-    selectClassName: "border-red-300 bg-red-500/10 text-red-700",
+    className: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-500/30",
+    selectClassName: "border-red-300 dark:border-red-700 bg-red-500/10 text-red-700 dark:text-red-400",
   },
 }
 
@@ -87,8 +87,8 @@ export function ComponentDetailView({
   const resourceBadgeClass = (type: ComponentResource["type"]) =>
     cn(
       "text-xs hover:bg-muted/60 cursor-pointer",
-      type === "testpad" && "bg-blue-500/10 text-blue-700 border-blue-200",
-      type === "video" && "bg-purple-500/10 text-purple-700 border-purple-200",
+      type === "testpad" && "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/30",
+      type === "video" && "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-500/30",
       type === "markdown" && "bg-muted text-muted-foreground",
     )
 
