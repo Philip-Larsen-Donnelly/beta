@@ -10,10 +10,10 @@ import type { Campaign } from "@/lib/types"
 export default async function AdminProgressPage({
   searchParams,
 }: {
-  searchParams: Promise<{ campaign?: string }>
+  searchParams: { campaign?: string }
 }) {
-  const { campaign: campaignId } = await searchParams
-  const cookieStore = await cookies()
+  const { campaign: campaignId } = searchParams
+  const cookieStore = cookies()
   const savedCampaign = cookieStore.get("admin_campaign")?.value
 
   const { rows: campaigns } = await query<Campaign>(
