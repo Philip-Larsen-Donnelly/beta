@@ -12,10 +12,10 @@ const ALL_CAMPAIGNS = "__all__"
 export default async function AdminBugAnalyticsPage({
   searchParams,
 }: {
-  searchParams?: { campaign?: string }
+  searchParams: Promise<{ campaign?: string }>
 }) {
-  const { campaign: campaignId } = searchParams || {}
-  const cookieStore = cookies()
+  const { campaign: campaignId } = await searchParams
+  const cookieStore = await cookies()
   const savedCampaign = cookieStore.get("admin_campaign")?.value
 
   const { rows: campaigns } = await query<Campaign>(
