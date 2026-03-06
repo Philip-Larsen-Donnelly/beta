@@ -1,16 +1,22 @@
 import { query } from "@/lib/db"
 import { AdminUserList } from "@/components/admin/user-list"
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle, ChevronLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import { fetchUserActivity } from "@/lib/analytics"
 
 export default async function AdminUsersPage() {
   let users = []
+  let userActivity = []
   let error = null
 
   try {
-    const { rows } = await query("SELECT * FROM profiles ORDER BY created_at DESC")
-    users = rows || []
+    const [profileResult, activityResult] = await Promise.all([
+      query("SELECT * FROM profiles ORDER BY created_at DESC"),
+      fetchUserActivity(),
+    ])
+    users = profileResult.rows || []
+    userActivity = activityResult
   } catch (e) {
     error = e instanceof Error ? e.message : "Failed to load data"
   }
@@ -39,13 +45,19 @@ export default async function AdminUsersPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-1">
+        <Link href="/admin">
+          <Button variant="ghost" size="sm">
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Back to Admin Dashboard
+          </Button>
+        </Link>
         <h1 className="text-2xl font-bold tracking-tight">Manage Users</h1>
         <p className="text-muted-foreground">
           View and manage registered testers. Set admin privileges or remove users.
         </p>
       </div>
 
-      <AdminUserList users={users} />
+      <AdminUserList users={users} userActivity={userActivity} />
     </div>
   )
 }

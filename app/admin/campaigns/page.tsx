@@ -1,4 +1,7 @@
+import Link from "next/link"
 import { query } from "@/lib/db"
+import { Button } from "@/components/ui/button"
+import { ChevronLeft } from "lucide-react"
 import { AdminCampaignList } from "@/components/admin/campaign-list"
 
 export default async function AdminCampaignsPage() {
@@ -15,6 +18,12 @@ export default async function AdminCampaignsPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-1">
+        <Link href="/admin">
+          <Button variant="ghost" size="sm">
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Back to Admin Dashboard
+          </Button>
+        </Link>
         <h1 className="text-2xl font-bold tracking-tight">Manage Campaigns</h1>
         <p className="text-muted-foreground">Create and configure testing campaigns</p>
       </div>
