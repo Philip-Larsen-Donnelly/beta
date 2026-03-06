@@ -1,7 +1,6 @@
 import Link from "next/link"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Bug, Users, FolderOpen, ArrowRight, AlertCircle, CheckCircle2, Tags } from "lucide-react"
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Bug, Users, FolderOpen, AlertCircle, CheckCircle2, Tags, BarChart3, ClipboardList, FileText, Activity } from "lucide-react"
 import { query } from "@/lib/db"
 
 export default async function AdminPage() {
@@ -89,84 +88,126 @@ export default async function AdminPage() {
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Management</h2>
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FolderOpen className="h-5 w-5" />
-                Campaigns
-              </CardTitle>
-              <CardDescription>
-                Create and configure testing campaigns. Components are managed within each campaign.
-              </CardDescription>
-          </CardHeader>
-          <CardContent>
-              <Button asChild>
-                <Link href="/admin/campaigns">
-                  Manage Campaigns
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-          </CardContent>
-        </Card>
+        <h2 className="text-lg font-semibold">Configuration</h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          <Link href="/admin/campaigns" className="block">
+            <Card className="h-full transition-colors hover:bg-muted/50 cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FolderOpen className="h-5 w-5" />
+                  Campaigns
+                </CardTitle>
+                <CardDescription>
+                  Create and configure testing campaigns. Components are managed within each campaign.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
 
-        <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bug className="h-5 w-5" />
-                Bug Reports
-              </CardTitle>
-              <CardDescription>
-                View and manage all submitted bugs across campaigns.{" "}
-                {openBugCount > 0 && `${openBugCount} requiring attention.`}
-              </CardDescription>
-          </CardHeader>
-          <CardContent>
-              <Button asChild variant="outline">
-                <Link href="/admin/bugs">
-                  View All Bugs
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-          </CardContent>
-        </Card>
+          <Link href="/admin/users" className="block">
+            <Card className="h-full transition-colors hover:bg-muted/50 cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Users
+                </CardTitle>
+                <CardDescription>Manage registered testers. Set admin privileges or remove users.</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Users
-              </CardTitle>
-              <CardDescription>Manage registered testers. Set admin privileges or remove users.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button asChild variant="outline">
-                <Link href="/admin/users">
-                  Manage Users
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
+          <Link href="/admin/categories" className="block">
+            <Card className="h-full transition-colors hover:bg-muted/50 cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Tags className="h-5 w-5" />
+                  Component Categories
+                </CardTitle>
+                <CardDescription>Define and manage categories for components</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        </div>
+      </div>
 
-        <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Tags className="h-5 w-5" />
-                Component Categories
-              </CardTitle>
-              <CardDescription>Define and manage categories for components</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button asChild variant="outline">
-                <Link href="/admin/categories">
-                  Manage Categories
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Triage</h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          <Link href="/admin/bugs" className="block">
+            <Card className="h-full transition-colors hover:bg-muted/50 cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bug className="h-5 w-5" />
+                  Bug Reports
+                </CardTitle>
+                <CardDescription>
+                  Review and manage all submitted bugs across campaigns.{" "}
+                  {openBugCount > 0 && `${openBugCount} requiring attention.`}
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/admin/progress" className="block">
+            <Card className="h-full transition-colors hover:bg-muted/50 cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5" />
+                  Testing Progress
+                </CardTitle>
+                <CardDescription>
+                  Per-user and per-component progress tracking with stale work detection.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Analytics</h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          <Link href="/admin/bug-analytics" className="block">
+            <Card className="h-full transition-colors hover:bg-muted/50 cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Bug Analytics
+                </CardTitle>
+                <CardDescription>
+                  Bug distribution, severity breakdown, and reporter activity.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/admin/testpad-coverage" className="block">
+            <Card className="h-full transition-colors hover:bg-muted/50 cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ClipboardList className="h-5 w-5" />
+                  Testpad Coverage
+                </CardTitle>
+                <CardDescription>
+                  Testpad execution rates and pass/fail/blocked results.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+
+          <Link href="/admin/reports" className="block">
+            <Card className="h-full transition-colors hover:bg-muted/50 cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Campaign Reports
+                </CardTitle>
+                <CardDescription>
+                  Campaign summaries with coverage and bug metrics.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
         </div>
       </div>
     </div>

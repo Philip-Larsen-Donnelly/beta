@@ -30,18 +30,25 @@ import {
 } from "@/components/ui/dialog"
 import { Trash2, Shield, Search, ArrowUpDown, ArrowUp, ArrowDown, KeyRound } from "lucide-react"
 import type { Profile } from "@/lib/types"
+import type { UserActivityRow } from "@/lib/analytics"
 import { updateUser, deleteUser, deleteUsers, createUsers, createInviteForProfile } from "@/lib/actions"
 import { formatDateTime } from "@/lib/utils"
 
 interface AdminUserListProps {
   users: Profile[]
+  userActivity?: UserActivityRow[]
 }
 
 type SortField = "username" | "email" | "organisation" | "created_at" | "is_admin" | "is_hisp"
 type SortDirection = "asc" | "desc"
 type FilterType = "all" | "admin" | "user"
 
-export function AdminUserList({ users: initialUsers }: AdminUserListProps) {
+export function AdminUserList({ users: initialUsers, userActivity = [] }: AdminUserListProps) {
+  const activityMap = useMemo(() => {
+    const map = new Map<string, UserActivityRow>()
+    userActivity.forEach((a) => map.set(a.user_id, a))
+    return map
+  }, [userActivity])
   const router = useRouter()
   const [users, setUsers] = useState(initialUsers)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -352,13 +359,14 @@ export function AdminUserList({ users: initialUsers }: AdminUserListProps) {
                   <SortIcon field="is_hisp" />
                 </button>
               </TableHead>
+              <TableHead className="text-center">Activity</TableHead>
               <TableHead className="w-24"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredAndSortedUsers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                   No users found
                 </TableCell>
               </TableRow>
@@ -393,6 +401,26 @@ export function AdminUserList({ users: initialUsers }: AdminUserListProps) {
                       <TableCell className="text-center">
                         <Switch checked={user.is_hisp} onCheckedChange={() => handleToggleHisp(user)} />
                       </TableCell>
+                  <TableCell className="text-center">
+                    {(() => {
+                      const activity = activityMap.get(user.id)
+                      if (!activity) return <span className="text-muted-foreground/40">—</span>
+                      const total = activity.components_selected + activity.bugs_submitted + activity.votes_cast + activity.comments_made + activity.testpad_steps
+                      if (total === 0) return <span className="text-muted-foreground/40">Inactive</span>
+                      const parts: string[] = []
+                      if (activity.components_selected > 0) parts.push(`${activity.components_completed}/${activity.components_selected} comp`)
+                      if (activity.bugs_submitted > 0) parts.push(`${activity.bugs_submitted} bugs`)
+                      if (activity.votes_cast > 0) parts.push(`${activity.votes_cast} votes`)
+                      if (activity.comments_made > 0) parts.push(`${activity.comments_made} comments`)
+                      if (activity.testpad_steps > 0) parts.push(`${activity.testpad_steps} steps`)
+                      return (
+                        <span className="text-xs text-muted-foreground" title={parts.join(", ")}>
+                          {parts.slice(0, 2).join(", ")}
+                          {parts.length > 2 && "…"}
+                        </span>
+                      )
+                    })()}
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <Button

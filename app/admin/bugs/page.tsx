@@ -1,7 +1,7 @@
 import { query } from "@/lib/db"
 import { requireProfile } from "@/lib/auth"
 import { AdminBugList } from "@/components/admin/bug-list"
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle, ChevronLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 
@@ -84,6 +84,12 @@ export default async function AdminBugsPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-1">
+        <Link href="/admin">
+          <Button variant="ghost" size="sm">
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Back to Admin Dashboard
+          </Button>
+        </Link>
         <h1 className="text-2xl font-bold tracking-tight">All Bug Reports</h1>
         <p className="text-muted-foreground">View and manage all submitted bugs across campaigns</p>
       </div>
