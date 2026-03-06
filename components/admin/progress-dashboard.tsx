@@ -1,6 +1,7 @@
 "use client"
 
 import { useRouter, useSearchParams } from "next/navigation"
+import Link from "next/link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -438,9 +439,9 @@ export function ProgressDashboard({
                           <TableRow key={bug.id}>
                             <TableCell className="font-mono text-xs whitespace-nowrap">
                               {ref ? (
-                                <a href={`/bugs/${ref}`} className="text-primary hover:underline">
+                                <Link href={`/bugs/${ref}`} className="text-primary hover:underline">
                                   {ref}
-                                </a>
+                                </Link>
                               ) : (
                                 "—"
                               )}

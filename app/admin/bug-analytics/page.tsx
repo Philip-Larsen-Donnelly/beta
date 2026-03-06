@@ -7,30 +7,35 @@ import { fetchBugStatusCounts, fetchBugsByComponent, fetchBugReporters } from "@
 import { BugAnalyticsDashboard } from "@/components/admin/bug-analytics-dashboard"
 import type { Campaign } from "@/lib/types"
 
+const ALL_CAMPAIGNS = "__all__"
+
 export default async function AdminBugAnalyticsPage({
   searchParams,
 }: {
-  searchParams?: { campaign?: string }
+  searchParams: Promise<{ campaign?: string }>
 }) {
-  const { campaign: campaignId } = searchParams || {}
-  const cookieStore = cookies()
+  const { campaign: campaignId } = await searchParams
+  const cookieStore = await cookies()
   const savedCampaign = cookieStore.get("admin_campaign")?.value
 
   const { rows: campaigns } = await query<Campaign>(
     "SELECT * FROM campaigns ORDER BY start_date DESC NULLS LAST",
   )
 
-  const explicitId = campaignId || savedCampaign
+  const isAllCampaigns = campaignId === ALL_CAMPAIGNS
+  const explicitId = isAllCampaigns ? null : (campaignId || savedCampaign)
   const activeCampaign = explicitId
     ? campaigns.find((c) => c.id === explicitId)
-    : campaigns.find((c) => {
-        const now = new Date()
-        const start = c.start_date ? new Date(c.start_date) : null
-        const end = c.end_date ? new Date(c.end_date) : null
-        return (!start || start <= now) && (!end || end >= now)
-      }) ?? campaigns[0]
+    : isAllCampaigns
+      ? undefined
+      : campaigns.find((c) => {
+          const now = new Date()
+          const start = c.start_date ? new Date(c.start_date) : null
+          const end = c.end_date ? new Date(c.end_date) : null
+          return (!start || start <= now) && (!end || end >= now)
+        }) ?? campaigns[0]
 
-  const selectedId = activeCampaign?.id ?? null
+  const selectedId = isAllCampaigns ? null : (activeCampaign?.id ?? null)
 
   const [statusCounts, bugsByComponent, reporters] = await Promise.all([
     fetchBugStatusCounts(selectedId),
