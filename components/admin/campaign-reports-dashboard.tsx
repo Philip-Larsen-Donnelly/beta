@@ -39,6 +39,13 @@ function SeverityBar({ critical, high, medium, low, total }: {
   )
 }
 
+function csvEscapeStr(value: string): string {
+  // Guard against formula injection (cells starting with =, +, -, @)
+  const sanitized = /^[=+\-@]/.test(value) ? `'${value}` : value
+  // Wrap in quotes and escape any embedded quotes by doubling them
+  return `"${sanitized.replace(/"/g, '""')}"`
+}
+
 function exportCsv(summaries: CampaignSummaryRow[]) {
   const headers = [
     "Campaign", "Code", "Start Date", "End Date",
@@ -53,10 +60,10 @@ function exportCsv(summaries: CampaignSummaryRow[]) {
       ? Math.round((s.components_completed / s.total_components) * 100)
       : 0
     return [
-      `"${s.campaign_name}"`,
-      s.campaign_code ?? "",
-      s.start_date ?? "",
-      s.end_date ?? "",
+      csvEscapeStr(s.campaign_name),
+      csvEscapeStr(s.campaign_code ?? ""),
+      csvEscapeStr(s.start_date ?? ""),
+      csvEscapeStr(s.end_date ?? ""),
       s.total_components,
       `${coveragePct}%`,
       s.components_completed,

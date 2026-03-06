@@ -167,7 +167,7 @@ export async function fetchUserProgress(campaignId: string): Promise<UserProgres
        COUNT(ucs.id) FILTER (WHERE ucs.status = 'completed')::int AS completed,
        COUNT(ucs.id) FILTER (WHERE ucs.status = 'blocked')::int AS blocked,
        COALESCE(bug_counts.cnt, 0)::int AS bugs_reported,
-       GREATEST(MAX(ucs.updated_at), MAX(bug_counts.last_bug)) AS last_activity
+       GREATEST(MAX(ucs.updated_at), COALESCE(MAX(bug_counts.last_bug), 'epoch'::timestamptz)) AS last_activity
      FROM profiles p
      INNER JOIN user_component_status ucs ON ucs.user_id = p.id AND ucs.is_selected = true
      INNER JOIN components comp ON comp.id = ucs.component_id AND comp.campaign_id = $1
@@ -415,7 +415,7 @@ export async function fetchUserTestpadProgress(campaignId: string): Promise<User
        cr.name AS resource_name,
        comp.name AS component_name,
        COUNT(tr.id)::int AS steps_completed,
-       0 AS total_steps,
+       (SELECT COUNT(DISTINCT step_index) FROM testpad_results WHERE resource_id = cr.id)::int AS total_steps,
        COUNT(tr.id) FILTER (WHERE tr.result = 'pass')::int AS pass_count,
        COUNT(tr.id) FILTER (WHERE tr.result = 'fail')::int AS fail_count,
        COUNT(tr.id) FILTER (WHERE tr.result = 'blocked')::int AS blocked_count
@@ -457,8 +457,8 @@ export async function fetchUserActivity(): Promise<UserActivityRow[]> {
      LEFT JOIN LATERAL (
        SELECT
          COUNT(*) FILTER (WHERE ucs.is_selected = true)::int AS components_selected,
-         COUNT(*) FILTER (WHERE ucs.status = 'completed')::int AS components_completed,
-         COUNT(*) FILTER (WHERE ucs.status = 'blocked')::int AS components_blocked
+         COUNT(*) FILTER (WHERE ucs.status = 'completed' AND ucs.is_selected = true)::int AS components_completed,
+         COUNT(*) FILTER (WHERE ucs.status = 'blocked' AND ucs.is_selected = true)::int AS components_blocked
        FROM user_component_status ucs WHERE ucs.user_id = p.id
      ) comp_data ON true
      LEFT JOIN LATERAL (

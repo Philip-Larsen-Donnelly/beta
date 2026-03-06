@@ -75,7 +75,9 @@ export function BugAnalyticsDashboard({
       : "by-component"
 
   const handleCampaignChange = (id: string) => {
-    if (id !== "__all__") {
+    if (id === "__all__") {
+      document.cookie = `admin_campaign=;path=/admin;max-age=0;samesite=lax`
+    } else {
       document.cookie = `admin_campaign=${id};path=/admin;max-age=${60 * 60 * 24 * 30};samesite=lax`
     }
     const params = new URLSearchParams(searchParams.toString())

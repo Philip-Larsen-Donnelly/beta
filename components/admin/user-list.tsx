@@ -411,6 +411,7 @@ export function AdminUserList({ users: initialUsers, userActivity = [] }: AdminU
                       if (activity.components_selected > 0) parts.push(`${activity.components_completed}/${activity.components_selected} comp`)
                       if (activity.bugs_submitted > 0) parts.push(`${activity.bugs_submitted} bugs`)
                       if (activity.votes_cast > 0) parts.push(`${activity.votes_cast} votes`)
+                      if (activity.comments_made > 0) parts.push(`${activity.comments_made} comments`)
                       if (activity.testpad_steps > 0) parts.push(`${activity.testpad_steps} steps`)
                       return (
                         <span className="text-xs text-muted-foreground" title={parts.join(", ")}>
