@@ -9,33 +9,42 @@ type LeaderboardRow = {
   total: number;
 };
 
-function RankIndicator({ rank }: { rank: number }) {
+type RankedLeaderboardRow = LeaderboardRow & {
+  rank: number;
+};
+
+function withCompetitionRank(rows: LeaderboardRow[]): RankedLeaderboardRow[] {
+  let lastTotal: number | null = null;
+  let currentRank = 0;
+  return rows.map((row) => {
+    if (lastTotal === null || row.total < lastTotal) {
+      currentRank += 1;
+      lastTotal = row.total;
+    }
+    return { ...row, rank: currentRank };
+  });
+}
+
+function rankRowStyle(rank: number): React.CSSProperties | undefined {
   if (rank === 1) {
-    return (
-      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500/15 text-xs font-medium text-amber-600 dark:text-amber-400">
-        1
-      </span>
-    );
+    return {
+      backgroundImage: "linear-gradient(135deg, #facc15, #d97706)",
+      color: "#ffffff",
+    };
   }
   if (rank === 2) {
-    return (
-      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-zinc-500/10 text-xs font-medium text-zinc-500">
-        2
-      </span>
-    );
+    return {
+      backgroundImage: "linear-gradient(135deg, #e5e7eb, #4b5563)",
+      color: "#ffffff",
+    };
   }
   if (rank === 3) {
-    return (
-      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-500/10 text-xs font-medium text-orange-600 dark:text-orange-400">
-        3
-      </span>
-    );
+    return {
+      backgroundImage: "linear-gradient(135deg, #fb923c, #7c2d12)",
+      color: "#ffffff",
+    };
   }
-  return (
-    <span className="flex h-5 w-5 items-center justify-center text-xs text-muted-foreground">
-      {rank}
-    </span>
-  );
+  return undefined;
 }
 
 export default async function LeaderboardPage({
@@ -106,8 +115,7 @@ export default async function LeaderboardPage({
          JOIN profiles p ON p.id = u.user_id
          WHERE u.is_selected = true AND u.status = 'completed' AND u.component_id = ANY($1::uuid[])
          GROUP BY u.user_id, p.display_name, p.username, p.email
-         ORDER BY total DESC, name ASC
-         LIMIT 10`,
+         ORDER BY total DESC, name ASC`,
         [componentIds],
       )
     : { rows: [] };
@@ -119,16 +127,30 @@ export default async function LeaderboardPage({
          JOIN profiles p ON p.id = b.user_id
          WHERE b.component_id = ANY($1::uuid[])
          GROUP BY b.user_id, p.display_name, p.username, p.email
-         ORDER BY total DESC, name ASC
-         LIMIT 10`,
+         ORDER BY total DESC, name ASC`,
         [componentIds],
       )
     : { rows: [] };
 
-  const topCompleted = completedLeaderboard[0];
-  const topBugs = bugLeaderboard[0];
+  const rankedCompletedLeaderboard = withCompetitionRank(completedLeaderboard);
+  const rankedBugLeaderboard = withCompetitionRank(bugLeaderboard);
 
-  const renderTable = (rows: LeaderboardRow[], label: string) => (
+  const topCompleted = rankedCompletedLeaderboard[0];
+  const topBugs = rankedBugLeaderboard[0];
+  const topCompletedLeaders = topCompleted
+    ? rankedCompletedLeaderboard.filter((row) => row.total === topCompleted.total)
+    : [];
+  const topBugLeaders = topBugs
+    ? rankedBugLeaderboard.filter((row) => row.total === topBugs.total)
+    : [];
+
+  const formatLeaderNames = (rows: RankedLeaderboardRow[]) => {
+    const names = rows.map((row) => row.name);
+    if (names.length <= 3) return names.join(", ");
+    return `${names.slice(0, 3).join(", ")} +${names.length - 3} others`;
+  };
+
+  const renderTable = (rows: RankedLeaderboardRow[], label: string) => (
     <div className="rounded-lg border bg-card">
       <div className="px-4 py-3 border-b">
         <h3 className="text-sm font-medium">{label}</h3>
@@ -142,11 +164,10 @@ export default async function LeaderboardPage({
           rows.map((row, idx) => (
             <div
               key={row.user_id}
-              className={`flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/50 ${
-                idx === 0 ? "bg-muted/30" : ""
-              }`}
+              className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-muted/50"
+              style={rankRowStyle(row.rank)}
             >
-              <RankIndicator rank={idx + 1} />
+              <span className="w-6 text-xs font-medium">{row.rank}</span>
               <span
                 className={`flex-1 text-sm truncate ${
                   idx === 0 ? "font-medium" : ""
@@ -155,11 +176,7 @@ export default async function LeaderboardPage({
                 {row.name}
               </span>
               <span
-                className={`text-sm tabular-nums ${
-                  idx === 0
-                    ? "font-semibold"
-                    : "text-muted-foreground"
-                }`}
+                className={`text-sm tabular-nums ${idx === 0 ? "font-semibold" : ""}`}
               >
                 {row.total}
               </span>
@@ -215,10 +232,10 @@ export default async function LeaderboardPage({
             <div className="flex items-start justify-between">
               <div className="space-y-1">
                 <p className="text-sm font-medium text-amber-900/70 dark:text-amber-200/70">
-                  Top Tester
+                  {topCompletedLeaders.length > 1 ? "Top Testers (Joint 1st)" : "Top Tester"}
                 </p>
                 <p className="text-2xl font-semibold tracking-tight text-amber-950 dark:text-amber-50">
-                  {topCompleted ? topCompleted.name : "—"}
+                  {topCompleted ? formatLeaderNames(topCompletedLeaders) : "—"}
                 </p>
                 {topCompleted && (
                   <p className="text-sm text-amber-800/60 dark:text-amber-300/60">
@@ -241,10 +258,10 @@ export default async function LeaderboardPage({
             <div className="flex items-start justify-between">
               <div className="space-y-1">
                 <p className="text-sm font-medium text-sky-900/70 dark:text-sky-200/70">
-                  Top Bug Hunter
+                  {topBugLeaders.length > 1 ? "Top Bug Hunters (Joint 1st)" : "Top Bug Hunter"}
                 </p>
                 <p className="text-2xl font-semibold tracking-tight text-sky-950 dark:text-sky-50">
-                  {topBugs ? topBugs.name : "—"}
+                  {topBugs ? formatLeaderNames(topBugLeaders) : "—"}
                 </p>
                 {topBugs && (
                   <p className="text-sm text-sky-800/60 dark:text-sky-300/60">
@@ -265,8 +282,8 @@ export default async function LeaderboardPage({
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          {renderTable(completedLeaderboard, "Component coverage")}
-          {renderTable(bugLeaderboard, "Bugs reported")}
+          {renderTable(rankedCompletedLeaderboard, "Component coverage")}
+          {renderTable(rankedBugLeaderboard, "Bugs reported")}
         </div>
       </div>
     </AppShell>

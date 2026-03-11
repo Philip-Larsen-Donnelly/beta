@@ -2,6 +2,22 @@ import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
 import { query } from "@/lib/db";
 
+function getCompetitionRank(
+  rows: Array<{ user_id: string; total: number }>,
+  userId: string,
+) {
+  let lastTotal: number | null = null;
+  let currentRank = 0;
+  for (const row of rows) {
+    if (lastTotal === null || row.total < lastTotal) {
+      currentRank += 1;
+      lastTotal = row.total;
+    }
+    if (row.user_id === userId) return currentRank;
+  }
+  return null;
+}
+
 export async function UserStatsCards() {
   const profile = await requireProfile();
 
@@ -119,14 +135,18 @@ export async function UserStatsCards() {
          FROM user_component_status
          WHERE is_selected = true AND status = 'completed' AND component_id = ANY($1::uuid[])
          GROUP BY user_id
-         ORDER BY completed DESC, user_id
-         LIMIT 5`,
+         ORDER BY completed DESC, user_id`,
         [componentIds],
       )
     : { rows: [] };
   const badgeRankCurrent = componentIds.length
-    ? leaderboardCurrent.findIndex((row) => row.user_id === profile.id) + 1 ||
-      null
+    ? getCompetitionRank(
+        leaderboardCurrent.map((row) => ({
+          user_id: row.user_id,
+          total: row.completed,
+        })),
+        profile.id,
+      )
     : null;
 
   // leaderboards: all-time
@@ -136,13 +156,18 @@ export async function UserStatsCards() {
          FROM user_component_status
          WHERE is_selected = true AND status = 'completed' AND component_id = ANY($1::uuid[])
          GROUP BY user_id
-         ORDER BY completed DESC, user_id
-         LIMIT 5`,
+         ORDER BY completed DESC, user_id`,
         [allComponentIds],
       )
     : { rows: [] };
   const badgeRankAll = allComponentIds.length
-    ? leaderboardAll.findIndex((row) => row.user_id === profile.id) + 1 || null
+    ? getCompetitionRank(
+        leaderboardAll.map((row) => ({
+          user_id: row.user_id,
+          total: row.completed,
+        })),
+        profile.id,
+      )
     : null;
 
   const { rows: bugLeaderboardCurrent } = componentIds.length
@@ -151,14 +176,18 @@ export async function UserStatsCards() {
          FROM bugs
          WHERE component_id = ANY($1::uuid[])
          GROUP BY user_id
-         ORDER BY reported DESC, user_id
-         LIMIT 5`,
+         ORDER BY reported DESC, user_id`,
         [componentIds],
       )
     : { rows: [] };
   const bugBadgeRankCurrent = componentIds.length
-    ? bugLeaderboardCurrent.findIndex((row) => row.user_id === profile.id) +
-        1 || null
+    ? getCompetitionRank(
+        bugLeaderboardCurrent.map((row) => ({
+          user_id: row.user_id,
+          total: row.reported,
+        })),
+        profile.id,
+      )
     : null;
 
   const { rows: bugLeaderboardAll } = allComponentIds.length
@@ -167,14 +196,18 @@ export async function UserStatsCards() {
          FROM bugs
          WHERE component_id = ANY($1::uuid[])
          GROUP BY user_id
-         ORDER BY reported DESC, user_id
-         LIMIT 5`,
+         ORDER BY reported DESC, user_id`,
         [allComponentIds],
       )
     : { rows: [] };
   const bugBadgeRankAll = allComponentIds.length
-    ? bugLeaderboardAll.findIndex((row) => row.user_id === profile.id) + 1 ||
-      null
+    ? getCompetitionRank(
+        bugLeaderboardAll.map((row) => ({
+          user_id: row.user_id,
+          total: row.reported,
+        })),
+        profile.id,
+      )
     : null;
 
   const hasCurrentStats =
@@ -207,31 +240,17 @@ export async function UserStatsCards() {
         }; // silver
       case 3:
         return {
-          bgFrom: "#f59e0b",
-          bgTo: "#92400e",
-          ring: "#78350f",
+          bgFrom: "#fb923c",
+          bgTo: "#7c2d12",
+          ring: "#7c2d12",
           text: "#ffffff",
         }; // bronze
-      case 4:
-        return {
-          bgFrom: "#93c5fd",
-          bgTo: "#1e3a8a",
-          ring: "#1d4ed8",
-          text: "#ffffff",
-        }; // blue
-      case 5:
-        return {
-          bgFrom: "#c4b5fd",
-          bgTo: "#5b21b6",
-          ring: "#4c1d95",
-          text: "#ffffff",
-        }; // purple
       default:
         return {
-          bgFrom: "#fbbf24",
-          bgTo: "#b45309",
-          ring: "#92400e",
-          text: "#ffffff",
+          bgFrom: "#e5e7eb",
+          bgTo: "#9ca3af",
+          ring: "#9ca3af",
+          text: "#111827",
         };
     }
   };
@@ -288,7 +307,7 @@ export async function UserStatsCards() {
           <p className="text-2xl font-semibold leading-tight">
             {completedCountDisplay}
           </p>
-          {badgeRank && badgeRank > 0 && (
+          {badgeRank && badgeRank > 0 && badgeRank <= 10 && (
             <Link
               href="/leaderboard"
               className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold hover:opacity-80 transition-opacity"
@@ -298,7 +317,7 @@ export async function UserStatsCards() {
               }}
               title={`${ordinal(badgeRank)} in the leaderboard`}
             >
-              #{badgeRank}
+              {ordinal(badgeRank)} position!
             </Link>
           )}
         </div>
@@ -310,7 +329,7 @@ export async function UserStatsCards() {
           <p className="text-2xl font-semibold leading-tight">
             {bugsReportedDisplay}
           </p>
-          {bugBadgeRank && bugBadgeRank > 0 && (
+          {bugBadgeRank && bugBadgeRank > 0 && bugBadgeRank <= 10 && (
             <Link
               href="/leaderboard"
               className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold hover:opacity-80 transition-opacity"
@@ -320,7 +339,7 @@ export async function UserStatsCards() {
               }}
               title={`${ordinal(bugBadgeRank)} in the leaderboard`}
             >
-              #{bugBadgeRank}
+              {ordinal(bugBadgeRank)} position!
             </Link>
           )}
         </div>
