@@ -84,54 +84,74 @@ export function CampaignList({ campaigns, componentCounts }: CampaignListProps) 
         <div className="grid gap-4 grid-cols-2">
           {filteredCampaigns.map((campaign) => {
             const status = getCampaignStatus(campaign)
-            const CardWrapper = status.active ? Link : "div"
+            const card = (
+              <Card
+                className={cn(
+                  "h-full transition-colors",
+                  status.active && "cursor-pointer hover:bg-muted/50",
+                  !status.active && "bg-muted/20 border-dashed border-muted-foreground/30 saturate-50 opacity-75",
+                )}
+              >
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle
+                      className={cn(
+                        "flex items-center gap-2",
+                        !status.active && "text-muted-foreground",
+                      )}
+                    >
+                      {status.active ? (
+                        <FolderOpen className="h-5 w-5" />
+                      ) : (
+                        <Lock className="h-5 w-5 text-muted-foreground" />
+                      )}
+                      {campaign.name}
+                    </CardTitle>
+                    {campaign.code && (
+                      <span className="font-mono text-xs text-muted-foreground rounded border px-1.5 py-0.5 shrink-0">
+                        {campaign.code}
+                      </span>
+                    )}
+                  </div>
+                  {campaign.description && <CardDescription>{campaign.description}</CardDescription>}
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    {componentCounts[campaign.id] || 0} component
+                    {(componentCounts[campaign.id] || 0) !== 1 ? "s" : ""}
+                  </p>
+                  {(campaign.start_date || campaign.end_date) && (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Calendar className="h-3 w-3" />
+                      {formatDate(campaign.start_date) || "No start"} – {formatDate(campaign.end_date) || "No end"}
+                    </div>
+                  )}
+                  {!status.active && (
+                    <p
+                      className={cn(
+                        "text-xs font-semibold",
+                        status.reason === "Campaign not started"
+                          ? "text-amber-700 dark:text-amber-300"
+                          : "text-destructive",
+                      )}
+                    >
+                      {status.reason}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )
 
             return (
-              <CardWrapper
-                key={campaign.id}
-                href={status.active ? `/testing/campaign/${campaign.id}` : undefined}
-                className={cn(!status.active && "cursor-not-allowed")}
-              >
-                <Card
-                  className={cn(
-                    "h-full transition-colors",
-                    status.active && "cursor-pointer hover:bg-muted/50",
-                    !status.active && "opacity-50",
-                  )}
-                >
-                  <CardHeader>
-                    <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="flex items-center gap-2">
-                        {status.active ? (
-                          <FolderOpen className="h-5 w-5" />
-                        ) : (
-                          <Lock className="h-5 w-5 text-muted-foreground" />
-                        )}
-                        {campaign.name}
-                      </CardTitle>
-                      {campaign.code && (
-                        <span className="font-mono text-xs text-muted-foreground rounded border px-1.5 py-0.5 shrink-0">
-                          {campaign.code}
-                        </span>
-                      )}
-                    </div>
-                    {campaign.description && <CardDescription>{campaign.description}</CardDescription>}
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <p className="text-sm text-muted-foreground">
-                      {componentCounts[campaign.id] || 0} component
-                      {(componentCounts[campaign.id] || 0) !== 1 ? "s" : ""}
-                    </p>
-                    {(campaign.start_date || campaign.end_date) && (
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Calendar className="h-3 w-3" />
-                        {formatDate(campaign.start_date) || "No start"} – {formatDate(campaign.end_date) || "No end"}
-                      </div>
-                    )}
-                    {!status.active && <p className="text-xs font-medium text-destructive">{status.reason}</p>}
-                  </CardContent>
-                </Card>
-              </CardWrapper>
+              status.active ? (
+                <Link key={campaign.id} href={`/testing/campaign/${campaign.id}`}>
+                  {card}
+                </Link>
+              ) : (
+                <div key={campaign.id} className="cursor-not-allowed">
+                  {card}
+                </div>
+              )
             )
           })}
         </div>
