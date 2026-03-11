@@ -42,7 +42,11 @@ export default async function ComponentTestingPage({
 
   // Fetch user's status for this component
   const { rows: userStatusRows } = await query(
-    "SELECT * FROM user_component_status WHERE user_id = $1 AND component_id = $2 LIMIT 1",
+    `SELECT *
+     FROM user_component_status
+     WHERE user_id = $1 AND component_id = $2
+     ORDER BY is_selected DESC, updated_at DESC, created_at DESC
+     LIMIT 1`,
     [profile.id, id],
   )
   const userStatus = userStatusRows[0] ?? null

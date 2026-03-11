@@ -74,6 +74,7 @@ export function ComponentDetailView({
 }: ComponentDetailViewProps) {
   const router = useRouter()
   const [status, setStatus] = useState<ComponentStatus>(userStatus?.status ?? "not_started")
+  const [statusRecordId, setStatusRecordId] = useState<string | undefined>(userStatus?.id)
   const [showReportModal, setShowReportModal] = useState(false)
   const [showCompleteModal, setShowCompleteModal] = useState(false)
 
@@ -101,24 +102,26 @@ export function ComponentDetailView({
 
     setStatus(newStatus)
 
-    await updateComponentStatus({
+    const updated = await updateComponentStatus({
       userId,
       componentId: component.id,
       status: newStatus,
-      existingStatusId: userStatus?.id,
+      existingStatusId: statusRecordId,
     })
+    if (updated?.id) setStatusRecordId(updated.id)
   }
 
   const confirmComplete = async () => {
     setShowCompleteModal(false)
     setStatus("completed")
 
-    await updateComponentStatus({
+    const updated = await updateComponentStatus({
       userId,
       componentId: component.id,
       status: "completed",
-      existingStatusId: userStatus?.id,
+      existingStatusId: statusRecordId,
     })
+    if (updated?.id) setStatusRecordId(updated.id)
   }
 
   const handleBugSubmitted = () => {
