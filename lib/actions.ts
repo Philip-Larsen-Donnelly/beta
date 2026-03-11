@@ -59,6 +59,7 @@ export async function submitBug(data: {
   )
   revalidatePath("/testing")
   revalidatePath("/testing/campaign")
+  revalidatePath(`/testing/${data.componentId}`)
   return { success: true }
 }
 
@@ -90,6 +91,7 @@ export async function updateComponentSelection(data: {
   )
   revalidatePath("/testing")
   revalidatePath("/testing/campaign")
+  revalidatePath(`/testing/${data.componentId}`)
   return rows[0] ?? null
 }
 
@@ -122,6 +124,7 @@ export async function updateComponentStatus(data: {
   )
   revalidatePath("/testing")
   revalidatePath("/testing/campaign")
+  revalidatePath(`/testing/${data.componentId}`)
   return rows[0] ?? null
 }
 
