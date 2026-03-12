@@ -7,7 +7,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { acceptInvite } from "@/lib/actions"
 
-export default function InviteAcceptClient({ token }: { token: string }) {
+export default function InviteAcceptClient({
+  token,
+  requireEmail,
+}: {
+  token: string
+  requireEmail: boolean
+}) {
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -51,10 +57,12 @@ export default function InviteAcceptClient({ token }: { token: string }) {
     <div className="max-w-md mx-auto py-12">
       <h2 className="text-xl font-semibold mb-4">Complete your account</h2>
       <div className="space-y-4">
-        <div>
-          <Label htmlFor="email">Email (only required if not already set)</Label>
-          <Input id="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
+        {requireEmail && (
+          <div>
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+        )}
         <div>
           <Label htmlFor="password">New password</Label>
           <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
