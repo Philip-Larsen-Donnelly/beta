@@ -131,6 +131,15 @@ function parseCsvLine(line: string): string[] {
   return values
 }
 
+function toGoogleDrivePreviewUrl(url: string): string | null {
+  const trimmed = url.trim()
+  const match = trimmed.match(
+    /^https?:\/\/drive\.google\.com\/file\/d\/([^/?#]+)(?:\/view)?(?:\?.*)?$/i,
+  )
+  if (!match) return null
+  return `https://drive.google.com/file/d/${match[1]}/preview`
+}
+
 /**
  * Split CSV content into logical records, handling multi-line quoted values.
  * A quoted value can span multiple lines — we need to join those lines into
@@ -353,7 +362,15 @@ export default async function ResourcePage({
           <CardContent className="pt-2 space-y-3">
             {content ? (
               <>
-                {/\.(mp4|webm|ogg)(\?.*)?$/i.test(content.trim()) ? (
+                {toGoogleDrivePreviewUrl(content.trim()) ? (
+                  <iframe
+                    src={toGoogleDrivePreviewUrl(content.trim())!}
+                    className="w-full aspect-video rounded-md border"
+                    allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                    allowFullScreen
+                    title="Google Drive video preview"
+                  />
+                ) : /\.(mp4|webm|ogg)(\?.*)?$/i.test(content.trim()) ? (
                   <video controls className="w-full rounded-md border">
                     <source src={content.trim()} />
                     Your browser does not support the video tag.

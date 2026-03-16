@@ -60,8 +60,14 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
             return <td className="border border-border px-2 py-1 text-muted-foreground">{children}</td>
           },
           a({ children, href }) {
-        return (
-              <a className="text-primary underline decoration-primary/50 underline-offset-2" href={href} rel="noreferrer">
+            const isExternal = typeof href === "string" && /^https?:\/\//i.test(href)
+            return (
+              <a
+                className="text-primary underline decoration-primary/50 underline-offset-2"
+                href={href}
+                target={isExternal ? "_blank" : undefined}
+                rel={isExternal ? "noopener noreferrer" : undefined}
+              >
                 {children}
               </a>
             )
