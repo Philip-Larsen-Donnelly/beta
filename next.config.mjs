@@ -11,9 +11,10 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
+      "media-src 'self' data: blob: https://s3.eu-west-1.amazonaws.com https://drive.google.com https://docs.google.com https://*.googleusercontent.com",
       "font-src 'self' data:",
       "connect-src 'self'",
-      "frame-src 'none'",
+      "frame-src 'self' https://drive.google.com https://docs.google.com",
     ].join('; '),
   },
   {
