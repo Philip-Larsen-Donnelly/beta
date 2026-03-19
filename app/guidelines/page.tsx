@@ -74,7 +74,7 @@ export default function GuidelinesPage() {
               <li>Use clear, descriptive titles</li>
               <li>Include steps to reproduce the issue</li>
               <li>Describe expected vs actual behavior</li>
-            <li>Set appropriate severity (see Severity Guide below)</li>
+            <li>Set the appropriate severity level</li>
             </ul>
           </CardContent>
         </Card>
