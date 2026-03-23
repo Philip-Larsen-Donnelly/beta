@@ -62,7 +62,7 @@ What was the behaviour that you expected?`
     })
   }
 
-  const uploadImage = async (file: File) => {
+  const uploadMedia = async (file: File) => {
     const formData = new FormData()
     formData.append("file", file)
     const res = await fetch("/api/uploads", {
@@ -70,17 +70,31 @@ What was the behaviour that you expected?`
       body: formData,
     })
     if (!res.ok) {
-      throw new Error("Failed to upload image")
-    }
+      let message = "Failed to upload media"
+      try {
+        const data = await res.json()
+        if (typeof data?.error === "string") {
+          message = data.error
+        }
+      } catch {}
+      throw new Error(message)
+      }
     const data = await res.json()
     return data.url as string
+  }
+
+  const buildEmbeddedMediaMarkdown = (file: File, url: string) => {
+    if (file.type.startsWith("video/")) {
+      return `[${file.name}](${url})`
+    }
+    return `![${file.name}](${url})`
   }
 
   const handlePaste = async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const items = event.clipboardData?.items
     if (!items) return
     for (const item of items) {
-      if (item.type.startsWith("image/")) {
+      if (item.type.startsWith("image/") || item.type.startsWith("video/")) {
         event.preventDefault()
         const file = item.getAsFile()
         if (!file) return
@@ -88,8 +102,13 @@ What was the behaviour that you expected?`
         const safeFile = new File([buffer], file.name || "pasted-image", {
           type: file.type || "image/png",
         })
-        const url = await uploadImage(safeFile)
-        insertAtCursor(`![${safeFile.name}](${url})`)
+        try {
+          setError(null)
+          const url = await uploadMedia(safeFile)
+          insertAtCursor(buildEmbeddedMediaMarkdown(safeFile, url))
+        } catch (uploadError) {
+          setError(uploadError instanceof Error ? uploadError.message : "Failed to upload media")
+        }
         return
       }
     }
@@ -98,8 +117,13 @@ What was the behaviour that you expected?`
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
-    const url = await uploadImage(file)
-    insertAtCursor(`![${file.name}](${url})`)
+    try {
+      setError(null)
+      const url = await uploadMedia(file)
+      insertAtCursor(buildEmbeddedMediaMarkdown(file, url))
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "Failed to upload media")
+    }
     event.target.value = ""
   }
 
@@ -163,12 +187,12 @@ What was the behaviour that you expected?`
             size="sm"
             onClick={() => fileInputRef.current?.click()}
           >
-            Insert image
+            Insert media
           </Button>
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept="image/*,video/mp4,video/quicktime,.mov"
             className="hidden"
             onChange={handleFileChange}
           />
@@ -183,7 +207,7 @@ What was the behaviour that you expected?`
           required
         />
         <p className="text-xs text-muted-foreground">
-          Paste an image or use “Insert image” to upload and embed it.
+          Paste an image or use “Insert media” to upload and embed images/video.
         </p>
       </div>
 

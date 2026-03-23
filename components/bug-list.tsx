@@ -70,10 +70,14 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
   const [commentsLoading, setCommentsLoading] = useState(false)
   const [commentText, setCommentText] = useState("")
   const [commentError, setCommentError] = useState<string | null>(null)
+  const [editMediaError, setEditMediaError] = useState<string | null>(null)
+  const [isCommentFocused, setIsCommentFocused] = useState(false)
   const [hasExperienced, setHasExperienced] = useState(false)
   const [voteCount, setVoteCount] = useState(0)
   const editDescriptionRef = useRef<HTMLTextAreaElement | null>(null)
   const editFileInputRef = useRef<HTMLInputElement | null>(null)
+  const commentTextRef = useRef<HTMLTextAreaElement | null>(null)
+  const commentFileInputRef = useRef<HTMLInputElement | null>(null)
   const [viewMode, setViewMode] = useState<"edit" | "view">("edit")
   const canEditFields = editingBug
     ? isAdmin || editingBug.user_id === currentUserId
@@ -87,6 +91,7 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
     setEditSeverity(bug.severity)
     setEditPriority(bug.priority)
     setEditStatus(bug.status)
+    setEditMediaError(null)
     setViewMode("view")
   }
 
@@ -185,7 +190,7 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
     }
   }
 
-  const uploadImage = async (file: File) => {
+  const uploadMedia = async (file: File) => {
     const formData = new FormData()
     formData.append("file", file)
     const res = await fetch("/api/uploads", {
@@ -193,10 +198,22 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
       body: formData,
     })
     if (!res.ok) {
-      throw new Error("Failed to upload image")
+      let message = "Failed to upload media"
+      try {
+        const data = await res.json()
+        if (typeof data?.error === "string") {
+          message = data.error
+        }
+      } catch {}
+      throw new Error(message)
     }
     const data = await res.json()
     return data.url as string
+  }
+
+  const buildEmbeddedMediaMarkdown = (file: File, url: string) => {
+    if (file.type.startsWith("video/")) return `[${file.name}](${url})`
+    return `![${file.name}](${url})`
   }
 
   const insertEditAtCursor = (text: string) => {
@@ -215,12 +232,28 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
     })
   }
 
+  const insertCommentAtCursor = (text: string) => {
+    const el = commentTextRef.current
+    if (!el) {
+      setCommentText((prev) => prev + text)
+      return
+    }
+    const start = el.selectionStart ?? commentText.length
+    const end = el.selectionEnd ?? commentText.length
+    setCommentText((prev) => prev.slice(0, start) + text + prev.slice(end))
+    window.requestAnimationFrame(() => {
+      el.focus()
+      const pos = start + text.length
+      el.setSelectionRange(pos, pos)
+    })
+  }
+
   const handleEditPaste = async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
     if (!canEditFields) return
     const items = event.clipboardData?.items
     if (!items) return
     for (const item of items) {
-      if (item.type.startsWith("image/")) {
+      if (item.type.startsWith("image/") || item.type.startsWith("video/")) {
         event.preventDefault()
         const file = item.getAsFile()
         if (!file) return
@@ -228,8 +261,13 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
         const safeFile = new File([buffer], file.name || "pasted-image", {
           type: file.type || "image/png",
         })
-        const url = await uploadImage(safeFile)
-        insertEditAtCursor(`![${safeFile.name}](${url})`)
+        try {
+          setEditMediaError(null)
+          const url = await uploadMedia(safeFile)
+          insertEditAtCursor(buildEmbeddedMediaMarkdown(safeFile, url))
+        } catch (uploadError) {
+          setEditMediaError(uploadError instanceof Error ? uploadError.message : "Failed to upload media")
+        }
         return
       }
     }
@@ -239,8 +277,50 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
     if (!canEditFields) return
     const file = event.target.files?.[0]
     if (!file) return
-    const url = await uploadImage(file)
-    insertEditAtCursor(`![${file.name}](${url})`)
+    try {
+      setEditMediaError(null)
+      const url = await uploadMedia(file)
+      insertEditAtCursor(buildEmbeddedMediaMarkdown(file, url))
+    } catch (uploadError) {
+      setEditMediaError(uploadError instanceof Error ? uploadError.message : "Failed to upload media")
+    }
+    event.target.value = ""
+  }
+
+  const handleCommentPaste = async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = event.clipboardData?.items
+    if (!items) return
+    for (const item of items) {
+      if (item.type.startsWith("image/") || item.type.startsWith("video/")) {
+        event.preventDefault()
+        const file = item.getAsFile()
+        if (!file) return
+        const buffer = await file.arrayBuffer()
+        const safeFile = new File([buffer], file.name || "pasted-image", {
+          type: file.type || "image/png",
+        })
+        try {
+          setCommentError(null)
+          const url = await uploadMedia(safeFile)
+          insertCommentAtCursor(buildEmbeddedMediaMarkdown(safeFile, url))
+        } catch (uploadError) {
+          setCommentError(uploadError instanceof Error ? uploadError.message : "Failed to upload media")
+        }
+        return
+      }
+    }
+  }
+
+  const handleCommentFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    try {
+      setCommentError(null)
+      const url = await uploadMedia(file)
+      insertCommentAtCursor(buildEmbeddedMediaMarkdown(file, url))
+    } catch (uploadError) {
+      setCommentError(uploadError instanceof Error ? uploadError.message : "Failed to upload media")
+    }
     event.target.value = ""
   }
 
@@ -506,42 +586,42 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
             </DialogHeader>
             <div className="overflow-auto flex-1 space-y-4 py-4">
             <div className="grid gap-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="edit-description">Description</Label>
-                {isEditingEnabled && (
-                  <>
+              <Label htmlFor="edit-description">Description</Label>
+              {isEditingEnabled ? (
+                <>
+                  <div className="relative">
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
+                      className="absolute right-0 top-0 z-10 h-8 rounded-none rounded-tr-md border-l border-b px-2 text-xs"
                       onClick={() => editFileInputRef.current?.click()}
                     >
-                      Insert image
+                      Insert media
                     </Button>
                     <input
                       ref={editFileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/*,video/mp4,video/quicktime,.mov"
                       className="hidden"
                       onChange={handleEditFileChange}
                     />
-                  </>
-                )}
-              </div>
-              {isEditingEnabled ? (
-                <>
-                  <Textarea
-                    id="edit-description"
-                    rows={4}
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    className="max-h-[42vh] overflow-auto resize-y"
-                    onPaste={handleEditPaste}
-                    ref={editDescriptionRef}
-                  />
+                    <Textarea
+                      id="edit-description"
+                      rows={4}
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                      className="max-h-[42vh] overflow-auto resize-y pr-32 pt-10"
+                      onPaste={handleEditPaste}
+                      ref={editDescriptionRef}
+                    />
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    Paste an image or use “Insert image” to upload and embed it.
+                    Paste an image or use “Insert media” to upload and embed images/video.
                   </p>
+                  {editMediaError && (
+                    <p className="text-xs text-destructive">{editMediaError}</p>
+                  )}
                 </>
               ) : (
                 <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
@@ -675,7 +755,9 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
                           })}
                         </span>
                       </div>
-                      <p className="mt-1 whitespace-pre-line">{comment.content}</p>
+                      <div className="mt-1">
+                        <MarkdownContent content={comment.content} />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -684,13 +766,41 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
                 <p className="text-sm text-destructive">{commentError}</p>
               )}
               <div className="grid gap-2">
-                <Textarea
-                  id="new-comment"
-                  rows={3}
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="Add a comment..."
-                />
+                <div className="relative">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="absolute right-0 top-0 z-10 h-8 rounded-none rounded-tr-md border-l border-b px-2 text-xs"
+                    onClick={() => commentFileInputRef.current?.click()}
+                  >
+                    Insert media
+                  </Button>
+                  <input
+                    ref={commentFileInputRef}
+                    type="file"
+                    accept="image/*,video/mp4,video/quicktime,.mov"
+                    className="hidden"
+                    onChange={handleCommentFileChange}
+                  />
+                  <Textarea
+                    id="new-comment"
+                    rows={3}
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    placeholder="Add a comment..."
+                    className="pr-32 pt-10"
+                    onPaste={handleCommentPaste}
+                    onFocus={() => setIsCommentFocused(true)}
+                    onBlur={() => setIsCommentFocused(false)}
+                    ref={commentTextRef}
+                  />
+                </div>
+                {isCommentFocused && (
+                  <p className="text-xs text-muted-foreground">
+                    Paste an image or use &quot;Insert media&quot; to upload and embed images/video.
+                  </p>
+                )}
                 <Button
                   type="button"
                   variant="outline"

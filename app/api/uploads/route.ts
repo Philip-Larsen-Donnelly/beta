@@ -7,6 +7,15 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const uploadsDir = path.join(process.cwd(), "public", "uploads", "bugs")
+const maxVideoBytes = 20 * 1024 * 1024 // 20MB
+const allowedMimeTypes = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "video/mp4",
+  "video/quicktime", // .mov
+])
 
 function getExtension(fileName: string, fileType: string) {
   const ext = path.extname(fileName).toLowerCase()
@@ -15,6 +24,8 @@ function getExtension(fileName: string, fileType: string) {
   if (fileType === "image/jpeg") return ".jpg"
   if (fileType === "image/gif") return ".gif"
   if (fileType === "image/webp") return ".webp"
+  if (fileType === "video/mp4") return ".mp4"
+  if (fileType === "video/quicktime") return ".mov"
   return ""
 }
 
@@ -27,8 +38,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "file is required" }, { status: 400 })
     }
 
-    if (!file.type.startsWith("image/")) {
-      return NextResponse.json({ error: "Only image uploads are supported" }, { status: 400 })
+    if (!allowedMimeTypes.has(file.type)) {
+      return NextResponse.json({ error: "Only image, mp4, and mov uploads are supported" }, { status: 400 })
+    }
+    if (file.type.startsWith("video/") && file.size > maxVideoBytes) {
+      return NextResponse.json({ error: "Video uploads must be 20MB or smaller" }, { status: 400 })
     }
 
     const ext = getExtension(file.name, file.type)
@@ -42,6 +56,14 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ url: `/uploads/bugs/${filename}` })
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    const rawMessage = err instanceof Error ? err.message : String(err)
+    const normalized = rawMessage.toLowerCase()
+
+    // Next.js can throw this before we can inspect file.size on oversized multipart payloads.
+    if (normalized.includes("failed to parse body as formdata")) {
+      return NextResponse.json({ error: "Video uploads must be 20MB or smaller" }, { status: 413 })
+    }
+
+    return NextResponse.json({ error: rawMessage }, { status: 500 })
   }
 }
