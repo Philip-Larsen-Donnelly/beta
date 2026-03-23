@@ -5,6 +5,16 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -24,6 +34,8 @@ type BugCommentItem = {
   user_id: string
   content: string
   created_at: string
+  updated_at: string | null
+  deleted_at: string | null
   profile: { display_name: string | null; email: string | null } | null
 }
 
@@ -68,16 +80,18 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
   const [isExpanded, setIsExpanded] = useState(false)
   const [comments, setComments] = useState<BugCommentItem[]>([])
   const [commentsLoading, setCommentsLoading] = useState(false)
-  const [commentText, setCommentText] = useState("")
   const [commentError, setCommentError] = useState<string | null>(null)
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
+  const [commentToDeleteId, setCommentToDeleteId] = useState<string | null>(null)
+  const [isCommentActionSubmitting, setIsCommentActionSubmitting] = useState(false)
   const [editMediaError, setEditMediaError] = useState<string | null>(null)
-  const [isCommentFocused, setIsCommentFocused] = useState(false)
   const [hasExperienced, setHasExperienced] = useState(false)
   const [voteCount, setVoteCount] = useState(0)
   const editDescriptionRef = useRef<HTMLTextAreaElement | null>(null)
   const editFileInputRef = useRef<HTMLInputElement | null>(null)
   const commentTextRef = useRef<HTMLTextAreaElement | null>(null)
   const commentFileInputRef = useRef<HTMLInputElement | null>(null)
+  const editCommentRef = useRef<HTMLTextAreaElement | null>(null)
   const [viewMode, setViewMode] = useState<"edit" | "view">("edit")
   const canEditFields = editingBug
     ? isAdmin || editingBug.user_id === currentUserId
@@ -124,8 +138,10 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
     if (!editingBug) return
     let mounted = true
     setComments([])
-    setCommentText("")
     setCommentError(null)
+    setEditingCommentId(null)
+    setCommentToDeleteId(null)
+    if (commentTextRef.current) commentTextRef.current.value = ""
     setHasExperienced(false)
     setVoteCount(0)
     setCommentsLoading(true)
@@ -152,22 +168,91 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
   }, [editingBug?.id])
 
   const handleAddComment = async () => {
-    if (!editingBug || !commentText.trim()) return
+    const content = commentTextRef.current?.value?.trim()
+    if (!editingBug || !content) return
     setCommentError(null)
     try {
       const res = await fetch("/api/bug-comments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bugId: editingBug.id, content: commentText }),
+        body: JSON.stringify({ bugId: editingBug.id, content }),
       })
       if (!res.ok) throw new Error("Failed to add comment")
       const comment = await res.json()
       setComments((prev) => [...prev, comment])
-      setCommentText("")
+      if (commentTextRef.current) commentTextRef.current.value = ""
     } catch (error) {
       setCommentError(
         error instanceof Error ? error.message : "Failed to add comment",
       )
+    }
+  }
+
+  const getErrorMessage = async (res: Response, fallback: string) => {
+    try {
+      const data = await res.json()
+      if (typeof data?.error === "string") return data.error
+    } catch {}
+    return fallback
+  }
+
+  const startEditingComment = (comment: BugCommentItem) => {
+    setEditingCommentId(comment.id)
+    setCommentError(null)
+    requestAnimationFrame(() => {
+      if (editCommentRef.current) editCommentRef.current.value = comment.content
+    })
+  }
+
+  const saveCommentEdit = async (commentId: string) => {
+    const content = editCommentRef.current?.value?.trim()
+    if (!content) {
+      setCommentError("Comment content cannot be empty")
+      return
+    }
+    setIsCommentActionSubmitting(true)
+    setCommentError(null)
+    try {
+      const res = await fetch("/api/bug-comments", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commentId, content }),
+      })
+      if (!res.ok) {
+        throw new Error(await getErrorMessage(res, "Failed to update comment"))
+      }
+      const updated = (await res.json()) as BugCommentItem
+      setComments((prev) => prev.map((comment) => (comment.id === commentId ? updated : comment)))
+      setEditingCommentId(null)
+    } catch (error) {
+      setCommentError(error instanceof Error ? error.message : "Failed to update comment")
+    } finally {
+      setIsCommentActionSubmitting(false)
+    }
+  }
+
+  const softDeleteComment = async (commentId: string) => {
+    setIsCommentActionSubmitting(true)
+    setCommentError(null)
+    try {
+      const res = await fetch("/api/bug-comments", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commentId }),
+      })
+      if (!res.ok) {
+        throw new Error(await getErrorMessage(res, "Failed to delete comment"))
+      }
+      const updated = (await res.json()) as BugCommentItem
+      setComments((prev) => prev.map((comment) => (comment.id === commentId ? updated : comment)))
+      setCommentToDeleteId(null)
+      if (editingCommentId === commentId) {
+        setEditingCommentId(null)
+      }
+    } catch (error) {
+      setCommentError(error instanceof Error ? error.message : "Failed to delete comment")
+    } finally {
+      setIsCommentActionSubmitting(false)
     }
   }
 
@@ -234,18 +319,13 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
 
   const insertCommentAtCursor = (text: string) => {
     const el = commentTextRef.current
-    if (!el) {
-      setCommentText((prev) => prev + text)
-      return
-    }
-    const start = el.selectionStart ?? commentText.length
-    const end = el.selectionEnd ?? commentText.length
-    setCommentText((prev) => prev.slice(0, start) + text + prev.slice(end))
-    window.requestAnimationFrame(() => {
-      el.focus()
-      const pos = start + text.length
-      el.setSelectionRange(pos, pos)
-    })
+    if (!el) return
+    const start = el.selectionStart ?? el.value.length
+    const end = el.selectionEnd ?? el.value.length
+    el.value = el.value.slice(0, start) + text + el.value.slice(end)
+    const pos = start + text.length
+    el.focus()
+    el.setSelectionRange(pos, pos)
   }
 
   const handleEditPaste = async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -749,15 +829,74 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
                               comment.profile?.email ||
                               "Unknown user"}
                         </span>
-                        <span>
-                          {formatDistanceToNow(new Date(comment.created_at), {
-                            addSuffix: true,
-                          })}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span>
+                            {formatDistanceToNow(new Date(comment.created_at), {
+                              addSuffix: true,
+                            })}
+                            {comment.updated_at && comment.updated_at !== comment.created_at ? " (edited)" : ""}
+                          </span>
+                          {comment.user_id === currentUserId && !comment.deleted_at && (
+                            <>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-xs"
+                                disabled={isCommentActionSubmitting}
+                                onClick={() => startEditingComment(comment)}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-xs text-destructive"
+                                disabled={isCommentActionSubmitting}
+                                onClick={() => setCommentToDeleteId(comment.id)}
+                              >
+                                Delete
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <div className="mt-1">
-                        <MarkdownContent content={comment.content} />
-                      </div>
+                      {editingCommentId === comment.id ? (
+                        <div className="mt-2 space-y-2">
+                          <Textarea
+                            rows={3}
+                            defaultValue={comment.content}
+                            ref={editCommentRef}
+                            placeholder="Edit your comment..."
+                          />
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setEditingCommentId(null)}
+                              disabled={isCommentActionSubmitting}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => saveCommentEdit(comment.id)}
+                              disabled={isCommentActionSubmitting}
+                            >
+                              Save
+                            </Button>
+                          </div>
+                        </div>
+                      ) : comment.deleted_at ? (
+                        <p className="mt-1 italic text-muted-foreground">Comment deleted by user.</p>
+                      ) : (
+                        <div className="mt-1">
+                          <MarkdownContent content={comment.content} />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -765,7 +904,7 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
               {commentError && (
                 <p className="text-sm text-destructive">{commentError}</p>
               )}
-              <div className="grid gap-2">
+              <div className="group grid gap-2">
                 <div className="relative">
                   <Button
                     type="button"
@@ -786,26 +925,20 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
                   <Textarea
                     id="new-comment"
                     rows={3}
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
+                    defaultValue=""
                     placeholder="Add a comment..."
                     className="pr-32 pt-10"
                     onPaste={handleCommentPaste}
-                    onFocus={() => setIsCommentFocused(true)}
-                    onBlur={() => setIsCommentFocused(false)}
                     ref={commentTextRef}
                   />
                 </div>
-                {isCommentFocused && (
-                  <p className="text-xs text-muted-foreground">
-                    Paste an image or use &quot;Insert media&quot; to upload and embed images/video.
-                  </p>
-                )}
+                <p className="min-h-4 text-xs text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100">
+                  Paste an image or use &quot;Insert media&quot; to upload and embed images/video.
+                </p>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={handleAddComment}
-                  disabled={!commentText.trim()}
                 >
                   Add Comment
                 </Button>
@@ -824,6 +957,33 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AlertDialog
+        open={commentToDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setCommentToDeleteId(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Comment</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this comment? This will keep a deleted placeholder in the thread.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isCommentActionSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isCommentActionSubmitting || !commentToDeleteId}
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={() => {
+                if (commentToDeleteId) void softDeleteComment(commentToDeleteId)
+              }}
+            >
+              {isCommentActionSubmitting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

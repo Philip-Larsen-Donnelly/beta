@@ -62,6 +62,9 @@ export interface BugComment {
   user_id: string
   content: string
   created_at: string
+  updated_at?: string
+  deleted_at?: string | null
+  deleted_by?: string | null
   profile?: Profile
 }
 
