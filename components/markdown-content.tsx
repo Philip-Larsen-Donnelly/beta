@@ -6,6 +6,10 @@ interface MarkdownContentProps {
   content: string
 }
 
+function isVideoUrl(url: string) {
+  return /\.(mp4|mov|webm|ogg)(\?.*)?$/i.test(url)
+}
+
 export function MarkdownContent({ content }: MarkdownContentProps) {
   return (
     <div className="markdown-body">
@@ -61,6 +65,24 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
           },
           a({ children, href }) {
             const isExternal = typeof href === "string" && /^https?:\/\//i.test(href)
+            if (typeof href === "string" && isVideoUrl(href)) {
+              return (
+                <span className="block space-y-2">
+                  <video controls className="block w-full rounded-md border">
+                    <source src={href} />
+                    Your browser does not support the video tag.
+                  </video>
+                  <a
+                    className="text-primary underline decoration-primary/50 underline-offset-2"
+                    href={href}
+                    target={isExternal ? "_blank" : undefined}
+                    rel={isExternal ? "noopener noreferrer" : undefined}
+                  >
+                    {children}
+                  </a>
+                </span>
+              )
+            }
             return (
               <a
                 className="text-primary underline decoration-primary/50 underline-offset-2"

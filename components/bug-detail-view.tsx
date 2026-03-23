@@ -89,11 +89,15 @@ export function BugDetailView({ bug, currentUserId, isAdmin }: BugDetailViewProp
   const [commentsLoading, setCommentsLoading] = useState(true)
   const [commentText, setCommentText] = useState("")
   const [commentError, setCommentError] = useState<string | null>(null)
+  const [descriptionMediaError, setDescriptionMediaError] = useState<string | null>(null)
+  const [isCommentFocused, setIsCommentFocused] = useState(false)
   const [hasExperienced, setHasExperienced] = useState(false)
   const [voteCount, setVoteCount] = useState(bug.vote_count)
 
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const commentRef = useRef<HTMLTextAreaElement | null>(null)
+  const commentFileInputRef = useRef<HTMLInputElement | null>(null)
 
   const bugRef = formatBugRef(bug.bug_number, bug.campaign_code)
 
@@ -136,13 +140,27 @@ export function BugDetailView({ bug, currentUserId, isAdmin }: BugDetailViewProp
     await saveBug()
   }
 
-  const uploadImage = async (file: File) => {
+  const uploadMedia = async (file: File) => {
     const formData = new FormData()
     formData.append("file", file)
     const res = await fetch("/api/uploads", { method: "POST", body: formData })
-    if (!res.ok) throw new Error("Failed to upload image")
+    if (!res.ok) {
+      let message = "Failed to upload media"
+      try {
+        const data = await res.json()
+        if (typeof data?.error === "string") {
+          message = data.error
+        }
+      } catch {}
+      throw new Error(message)
+    }
     const data = await res.json()
     return data.url as string
+  }
+
+  const buildEmbeddedMediaMarkdown = (file: File, url: string) => {
+    if (file.type.startsWith("video/")) return `[${file.name}](${url})`
+    return `![${file.name}](${url})`
   }
 
   const insertAtCursor = (text: string) => {
@@ -161,12 +179,28 @@ export function BugDetailView({ bug, currentUserId, isAdmin }: BugDetailViewProp
     })
   }
 
+  const insertCommentAtCursor = (text: string) => {
+    const el = commentRef.current
+    if (!el) {
+      setCommentText((prev) => prev + text)
+      return
+    }
+    const start = el.selectionStart ?? commentText.length
+    const end = el.selectionEnd ?? commentText.length
+    setCommentText((prev) => prev.slice(0, start) + text + prev.slice(end))
+    window.requestAnimationFrame(() => {
+      el.focus()
+      const pos = start + text.length
+      el.setSelectionRange(pos, pos)
+    })
+  }
+
   const handlePaste = async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
     if (!canEditFields) return
     const items = event.clipboardData?.items
     if (!items) return
     for (const item of items) {
-      if (item.type.startsWith("image/")) {
+      if (item.type.startsWith("image/") || item.type.startsWith("video/")) {
         event.preventDefault()
         const file = item.getAsFile()
         if (!file) return
@@ -174,8 +208,13 @@ export function BugDetailView({ bug, currentUserId, isAdmin }: BugDetailViewProp
         const safeFile = new File([buffer], file.name || "pasted-image", {
           type: file.type || "image/png",
         })
-        const url = await uploadImage(safeFile)
-        insertAtCursor(`![${safeFile.name}](${url})`)
+        try {
+          setDescriptionMediaError(null)
+          const url = await uploadMedia(safeFile)
+          insertAtCursor(buildEmbeddedMediaMarkdown(safeFile, url))
+        } catch (uploadError) {
+          setDescriptionMediaError(uploadError instanceof Error ? uploadError.message : "Failed to upload media")
+        }
         return
       }
     }
@@ -185,8 +224,50 @@ export function BugDetailView({ bug, currentUserId, isAdmin }: BugDetailViewProp
     if (!canEditFields) return
     const file = event.target.files?.[0]
     if (!file) return
-    const url = await uploadImage(file)
-    insertAtCursor(`![${file.name}](${url})`)
+    try {
+      setDescriptionMediaError(null)
+      const url = await uploadMedia(file)
+      insertAtCursor(buildEmbeddedMediaMarkdown(file, url))
+    } catch (uploadError) {
+      setDescriptionMediaError(uploadError instanceof Error ? uploadError.message : "Failed to upload media")
+    }
+    event.target.value = ""
+  }
+
+  const handleCommentPaste = async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = event.clipboardData?.items
+    if (!items) return
+    for (const item of items) {
+      if (item.type.startsWith("image/") || item.type.startsWith("video/")) {
+        event.preventDefault()
+        const file = item.getAsFile()
+        if (!file) return
+        const buffer = await file.arrayBuffer()
+        const safeFile = new File([buffer], file.name || "pasted-image", {
+          type: file.type || "image/png",
+        })
+        try {
+          setCommentError(null)
+          const url = await uploadMedia(safeFile)
+          insertCommentAtCursor(buildEmbeddedMediaMarkdown(safeFile, url))
+        } catch (uploadError) {
+          setCommentError(uploadError instanceof Error ? uploadError.message : "Failed to upload media")
+        }
+        return
+      }
+    }
+  }
+
+  const handleCommentFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    try {
+      setCommentError(null)
+      const url = await uploadMedia(file)
+      insertCommentAtCursor(buildEmbeddedMediaMarkdown(file, url))
+    } catch (uploadError) {
+      setCommentError(uploadError instanceof Error ? uploadError.message : "Failed to upload media")
+    }
     event.target.value = ""
   }
 
@@ -301,41 +382,41 @@ export function BugDetailView({ bug, currentUserId, isAdmin }: BugDetailViewProp
       <CardContent className="space-y-4 pt-4">
         {/* Description */}
         <div className="grid gap-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <Label>Description</Label>
-            {isEditingEnabled && (
-              <>
+          <Label>Description</Label>
+          {isEditingEnabled ? (
+            <>
+              <div className="relative">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
+                  className="absolute right-0 top-0 z-10 h-8 rounded-none rounded-tr-md border-l border-b px-2 text-xs"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  Insert image
+                  Insert media
                 </Button>
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/mp4,video/quicktime,.mov"
                   className="hidden"
                   onChange={handleFileChange}
                 />
-              </>
-            )}
-          </div>
-          {isEditingEnabled ? (
-            <>
-              <Textarea
-                rows={6}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="max-h-[50vh] overflow-auto resize-y"
-                onPaste={handlePaste}
-                ref={descriptionRef}
-              />
+                <Textarea
+                  rows={6}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="max-h-[50vh] overflow-auto resize-y pr-32 pt-10"
+                  onPaste={handlePaste}
+                  ref={descriptionRef}
+                />
+              </div>
               <p className="text-xs text-muted-foreground">
-                Paste an image or use &quot;Insert image&quot; to upload and embed it.
+                Paste an image or use &quot;Insert media&quot; to upload and embed images/video.
               </p>
+              {descriptionMediaError && (
+                <p className="text-xs text-destructive">{descriptionMediaError}</p>
+              )}
             </>
           ) : (
             <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
@@ -477,19 +558,49 @@ export function BugDetailView({ bug, currentUserId, isAdmin }: BugDetailViewProp
                       {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
                     </span>
                   </div>
-                  <p className="mt-1 whitespace-pre-line">{comment.content}</p>
+                  <div className="mt-1">
+                    <MarkdownContent content={comment.content} />
+                  </div>
                 </div>
               ))}
             </div>
           )}
           {commentError && <p className="text-sm text-destructive">{commentError}</p>}
           <div className="grid gap-2">
-            <Textarea
-              rows={3}
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              placeholder="Add a comment..."
-            />
+            <div className="relative">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                  className="absolute right-0 top-0 z-10 h-8 rounded-none rounded-tr-md border-l border-b px-2 text-xs"
+                onClick={() => commentFileInputRef.current?.click()}
+              >
+                Insert media
+              </Button>
+              <input
+                ref={commentFileInputRef}
+                type="file"
+                accept="image/*,video/mp4,video/quicktime,.mov"
+                className="hidden"
+                onChange={handleCommentFileChange}
+              />
+              <Textarea
+                rows={3}
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                placeholder="Add a comment..."
+                className="pr-32 pt-10"
+                onPaste={handleCommentPaste}
+                onFocus={() => setIsCommentFocused(true)}
+                onBlur={() => setIsCommentFocused(false)}
+                ref={commentRef}
+              />
+            </div>
+            {isCommentFocused && (
+              <p className="text-xs text-muted-foreground">
+                Paste an image or use &quot;Insert media&quot; to upload and embed images/video.
+              </p>
+            )}
             <Button
               type="button"
               variant="outline"
