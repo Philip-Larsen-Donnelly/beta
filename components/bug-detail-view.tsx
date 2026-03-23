@@ -11,6 +11,16 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import type { BugSeverity, BugPriority, BugStatus } from "@/lib/types"
 import { cn, formatBugRef } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
@@ -24,6 +34,8 @@ type BugCommentItem = {
   user_id: string
   content: string
   created_at: string
+  updated_at: string | null
+  deleted_at: string | null
   profile: { display_name: string | null; email: string | null } | null
 }
 
@@ -47,6 +59,87 @@ const severityOptions = [
   { value: "high", label: "High", description: "Major feature broken" },
   { value: "critical", label: "Critical", description: "System crash, data loss" },
 ] as const
+
+async function uploadMedia(file: File) {
+  const formData = new FormData()
+  formData.append("file", file)
+  const res = await fetch("/api/uploads", { method: "POST", body: formData })
+  if (!res.ok) {
+    let message = "Failed to upload media"
+    try {
+      const data = await res.json()
+      if (typeof data?.error === "string") message = data.error
+    } catch {}
+    throw new Error(message)
+  }
+  const data = await res.json()
+  return data.url as string
+}
+
+function buildMediaMarkdown(file: File, url: string) {
+  if (file.type.startsWith("video/")) return `[${file.name}](${url})`
+  return `![${file.name}](${url})`
+}
+
+function insertTextAtCursor(el: HTMLTextAreaElement, text: string) {
+  const start = el.selectionStart
+  const end = el.selectionEnd
+  const before = el.value.slice(0, start)
+  const after = el.value.slice(end)
+  el.value = before + text + after
+  const pos = start + text.length
+  el.setSelectionRange(pos, pos)
+  el.focus()
+}
+
+async function handleMediaPaste(
+  event: React.ClipboardEvent<HTMLTextAreaElement>,
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>,
+  setError: (msg: string | null) => void,
+) {
+  const items = event.clipboardData?.items
+  if (!items) return
+  for (const item of items) {
+    if (item.type.startsWith("image/") || item.type.startsWith("video/")) {
+      event.preventDefault()
+      const file = item.getAsFile()
+      if (!file) return
+      const buffer = await file.arrayBuffer()
+      const safeFile = new File([buffer], file.name || "pasted-image", {
+        type: file.type || "image/png",
+      })
+      try {
+        setError(null)
+        const url = await uploadMedia(safeFile)
+        if (textareaRef.current) {
+          insertTextAtCursor(textareaRef.current, buildMediaMarkdown(safeFile, url))
+        }
+      } catch (uploadError) {
+        setError(uploadError instanceof Error ? uploadError.message : "Failed to upload media")
+      }
+      return
+    }
+  }
+}
+
+async function handleMediaFileChange(
+  event: React.ChangeEvent<HTMLInputElement>,
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>,
+  setError: (msg: string | null) => void,
+) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  try {
+    setError(null)
+    const url = await uploadMedia(file)
+    if (textareaRef.current) {
+      insertTextAtCursor(textareaRef.current, buildMediaMarkdown(file, url))
+    }
+  } catch (uploadError) {
+    setError(uploadError instanceof Error ? uploadError.message : "Failed to upload media")
+  }
+  event.target.value = ""
+}
 
 interface BugDetailViewProps {
   bug: {
@@ -87,17 +180,19 @@ export function BugDetailView({ bug, currentUserId, isAdmin }: BugDetailViewProp
 
   const [comments, setComments] = useState<BugCommentItem[]>([])
   const [commentsLoading, setCommentsLoading] = useState(true)
-  const [commentText, setCommentText] = useState("")
   const [commentError, setCommentError] = useState<string | null>(null)
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
+  const [commentToDeleteId, setCommentToDeleteId] = useState<string | null>(null)
+  const [isCommentActionSubmitting, setIsCommentActionSubmitting] = useState(false)
   const [descriptionMediaError, setDescriptionMediaError] = useState<string | null>(null)
-  const [isCommentFocused, setIsCommentFocused] = useState(false)
   const [hasExperienced, setHasExperienced] = useState(false)
   const [voteCount, setVoteCount] = useState(bug.vote_count)
 
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null)
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const descriptionFileInputRef = useRef<HTMLInputElement | null>(null)
   const commentRef = useRef<HTMLTextAreaElement | null>(null)
   const commentFileInputRef = useRef<HTMLInputElement | null>(null)
+  const editCommentRef = useRef<HTMLTextAreaElement | null>(null)
 
   const bugRef = formatBugRef(bug.bug_number, bug.campaign_code)
 
@@ -122,11 +217,7 @@ export function BugDetailView({ bug, currentUserId, isAdmin }: BugDetailViewProp
 
   const saveBug = async () => {
     setIsSubmitting(true)
-    const updates: Record<string, unknown> = {
-      title,
-      description,
-      severity,
-    }
+    const updates: Record<string, unknown> = { title, description, severity }
     if (isAdmin) {
       updates.priority = priority
       updates.status = status
@@ -136,156 +227,88 @@ export function BugDetailView({ bug, currentUserId, isAdmin }: BugDetailViewProp
     router.refresh()
   }
 
-  const handleSave = async () => {
-    await saveBug()
-  }
-
-  const uploadMedia = async (file: File) => {
-    const formData = new FormData()
-    formData.append("file", file)
-    const res = await fetch("/api/uploads", { method: "POST", body: formData })
-    if (!res.ok) {
-      let message = "Failed to upload media"
-      try {
-        const data = await res.json()
-        if (typeof data?.error === "string") {
-          message = data.error
-        }
-      } catch {}
-      throw new Error(message)
-    }
-    const data = await res.json()
-    return data.url as string
-  }
-
-  const buildEmbeddedMediaMarkdown = (file: File, url: string) => {
-    if (file.type.startsWith("video/")) return `[${file.name}](${url})`
-    return `![${file.name}](${url})`
-  }
-
-  const insertAtCursor = (text: string) => {
-    const el = descriptionRef.current
-    if (!el) {
-      setDescription((prev) => prev + text)
-      return
-    }
-    const start = el.selectionStart ?? description.length
-    const end = el.selectionEnd ?? description.length
-    setDescription((prev) => prev.slice(0, start) + text + prev.slice(end))
-    window.requestAnimationFrame(() => {
-      el.focus()
-      const pos = start + text.length
-      el.setSelectionRange(pos, pos)
-    })
-  }
-
-  const insertCommentAtCursor = (text: string) => {
-    const el = commentRef.current
-    if (!el) {
-      setCommentText((prev) => prev + text)
-      return
-    }
-    const start = el.selectionStart ?? commentText.length
-    const end = el.selectionEnd ?? commentText.length
-    setCommentText((prev) => prev.slice(0, start) + text + prev.slice(end))
-    window.requestAnimationFrame(() => {
-      el.focus()
-      const pos = start + text.length
-      el.setSelectionRange(pos, pos)
-    })
-  }
-
-  const handlePaste = async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    if (!canEditFields) return
-    const items = event.clipboardData?.items
-    if (!items) return
-    for (const item of items) {
-      if (item.type.startsWith("image/") || item.type.startsWith("video/")) {
-        event.preventDefault()
-        const file = item.getAsFile()
-        if (!file) return
-        const buffer = await file.arrayBuffer()
-        const safeFile = new File([buffer], file.name || "pasted-image", {
-          type: file.type || "image/png",
-        })
-        try {
-          setDescriptionMediaError(null)
-          const url = await uploadMedia(safeFile)
-          insertAtCursor(buildEmbeddedMediaMarkdown(safeFile, url))
-        } catch (uploadError) {
-          setDescriptionMediaError(uploadError instanceof Error ? uploadError.message : "Failed to upload media")
-        }
-        return
-      }
-    }
-  }
-
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!canEditFields) return
-    const file = event.target.files?.[0]
-    if (!file) return
-    try {
-      setDescriptionMediaError(null)
-      const url = await uploadMedia(file)
-      insertAtCursor(buildEmbeddedMediaMarkdown(file, url))
-    } catch (uploadError) {
-      setDescriptionMediaError(uploadError instanceof Error ? uploadError.message : "Failed to upload media")
-    }
-    event.target.value = ""
-  }
-
-  const handleCommentPaste = async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = event.clipboardData?.items
-    if (!items) return
-    for (const item of items) {
-      if (item.type.startsWith("image/") || item.type.startsWith("video/")) {
-        event.preventDefault()
-        const file = item.getAsFile()
-        if (!file) return
-        const buffer = await file.arrayBuffer()
-        const safeFile = new File([buffer], file.name || "pasted-image", {
-          type: file.type || "image/png",
-        })
-        try {
-          setCommentError(null)
-          const url = await uploadMedia(safeFile)
-          insertCommentAtCursor(buildEmbeddedMediaMarkdown(safeFile, url))
-        } catch (uploadError) {
-          setCommentError(uploadError instanceof Error ? uploadError.message : "Failed to upload media")
-        }
-        return
-      }
-    }
-  }
-
-  const handleCommentFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-    try {
-      setCommentError(null)
-      const url = await uploadMedia(file)
-      insertCommentAtCursor(buildEmbeddedMediaMarkdown(file, url))
-    } catch (uploadError) {
-      setCommentError(uploadError instanceof Error ? uploadError.message : "Failed to upload media")
-    }
-    event.target.value = ""
-  }
-
   const handleAddComment = async () => {
-    if (!commentText.trim()) return
+    const content = commentRef.current?.value?.trim()
+    if (!content) return
     setCommentError(null)
     try {
       const res = await fetch("/api/bug-comments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bugId: bug.id, content: commentText }),
+        body: JSON.stringify({ bugId: bug.id, content }),
       })
       if (!res.ok) throw new Error("Failed to add comment")
       const comment = await res.json()
       setComments((prev) => [...prev, comment])
-      setCommentText("")
+      if (commentRef.current) commentRef.current.value = ""
     } catch (error) {
       setCommentError(error instanceof Error ? error.message : "Failed to add comment")
+    }
+  }
+
+  const getErrorMessage = async (res: Response, fallback: string) => {
+    try {
+      const data = await res.json()
+      if (typeof data?.error === "string") return data.error
+    } catch {}
+    return fallback
+  }
+
+  const startEditingComment = (comment: BugCommentItem) => {
+    setEditingCommentId(comment.id)
+    setCommentError(null)
+    requestAnimationFrame(() => {
+      if (editCommentRef.current) editCommentRef.current.value = comment.content
+    })
+  }
+
+  const saveCommentEdit = async (commentId: string) => {
+    const content = editCommentRef.current?.value?.trim()
+    if (!content) {
+      setCommentError("Comment content cannot be empty")
+      return
+    }
+    setIsCommentActionSubmitting(true)
+    setCommentError(null)
+    try {
+      const res = await fetch("/api/bug-comments", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commentId, content }),
+      })
+      if (!res.ok) {
+        throw new Error(await getErrorMessage(res, "Failed to update comment"))
+      }
+      const updated = (await res.json()) as BugCommentItem
+      setComments((prev) => prev.map((c) => (c.id === commentId ? updated : c)))
+      setEditingCommentId(null)
+    } catch (error) {
+      setCommentError(error instanceof Error ? error.message : "Failed to update comment")
+    } finally {
+      setIsCommentActionSubmitting(false)
+    }
+  }
+
+  const softDeleteComment = async (commentId: string) => {
+    setIsCommentActionSubmitting(true)
+    setCommentError(null)
+    try {
+      const res = await fetch("/api/bug-comments", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commentId }),
+      })
+      if (!res.ok) {
+        throw new Error(await getErrorMessage(res, "Failed to delete comment"))
+      }
+      const updated = (await res.json()) as BugCommentItem
+      setComments((prev) => prev.map((c) => (c.id === commentId ? updated : c)))
+      setCommentToDeleteId(null)
+      if (editingCommentId === commentId) setEditingCommentId(null)
+    } catch (error) {
+      setCommentError(error instanceof Error ? error.message : "Failed to delete comment")
+    } finally {
+      setIsCommentActionSubmitting(false)
     }
   }
 
@@ -344,9 +367,7 @@ export function BugDetailView({ bug, currentUserId, isAdmin }: BugDetailViewProp
                 size="sm"
                 className={cn("h-8 px-4 gap-1.5 font-medium", viewMode !== "view" && "text-muted-foreground")}
                 onClick={async () => {
-                  if (viewMode === "edit") {
-                    await saveBug()
-                  }
+                  if (viewMode === "edit") await saveBug()
                   setViewMode("view")
                 }}
               >
@@ -356,7 +377,6 @@ export function BugDetailView({ bug, currentUserId, isAdmin }: BugDetailViewProp
             </div>
           )}
         </div>
-        {/* Meta info row */}
         <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-muted-foreground">
           <span>
             Reported by{" "}
@@ -391,23 +411,23 @@ export function BugDetailView({ bug, currentUserId, isAdmin }: BugDetailViewProp
                   variant="outline"
                   size="sm"
                   className="absolute right-0 top-0 z-10 h-8 rounded-none rounded-tr-md border-l border-b px-2 text-xs"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => descriptionFileInputRef.current?.click()}
                 >
                   Insert media
                 </Button>
                 <input
-                  ref={fileInputRef}
+                  ref={descriptionFileInputRef}
                   type="file"
                   accept="image/*,video/mp4,video/quicktime,.mov"
                   className="hidden"
-                  onChange={handleFileChange}
+                  onChange={(e) => handleMediaFileChange(e, descriptionRef, setDescriptionMediaError)}
                 />
                 <Textarea
                   rows={6}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="max-h-[50vh] overflow-auto resize-y pr-32 pt-10"
-                  onPaste={handlePaste}
+                  onPaste={(e) => handleMediaPaste(e, descriptionRef, setDescriptionMediaError)}
                   ref={descriptionRef}
                 />
               </div>
@@ -503,7 +523,7 @@ export function BugDetailView({ bug, currentUserId, isAdmin }: BugDetailViewProp
         {/* Save button in edit mode */}
         {isEditingEnabled && (
           <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={isSubmitting}>
+            <Button onClick={saveBug} disabled={isSubmitting}>
               {isSubmitting ? "Saving..." : "Save Changes"}
             </Button>
           </div>
@@ -554,25 +574,84 @@ export function BugDetailView({ bug, currentUserId, isAdmin }: BugDetailViewProp
                           comment.profile?.email ||
                           "Unknown user"}
                     </span>
-                    <span>
-                      {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span>
+                        {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
+                        {comment.updated_at && comment.updated_at !== comment.created_at ? " (edited)" : ""}
+                      </span>
+                      {comment.user_id === currentUserId && !comment.deleted_at && (
+                        <>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-xs"
+                            disabled={isCommentActionSubmitting}
+                            onClick={() => startEditingComment(comment)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-2 text-xs text-destructive"
+                            disabled={isCommentActionSubmitting}
+                            onClick={() => setCommentToDeleteId(comment.id)}
+                          >
+                            Delete
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="mt-1">
-                    <MarkdownContent content={comment.content} />
-                  </div>
+                  {editingCommentId === comment.id ? (
+                    <div className="mt-2 space-y-2">
+                      <Textarea
+                        rows={3}
+                        defaultValue={comment.content}
+                        ref={editCommentRef}
+                        placeholder="Edit your comment..."
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditingCommentId(null)}
+                          disabled={isCommentActionSubmitting}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => saveCommentEdit(comment.id)}
+                          disabled={isCommentActionSubmitting}
+                        >
+                          Save
+                        </Button>
+                      </div>
+                    </div>
+                  ) : comment.deleted_at ? (
+                    <p className="mt-1 italic text-muted-foreground">Comment deleted by user.</p>
+                  ) : (
+                    <div className="mt-1">
+                      <MarkdownContent content={comment.content} />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           )}
           {commentError && <p className="text-sm text-destructive">{commentError}</p>}
-          <div className="grid gap-2">
+          <div className="group grid gap-2">
             <div className="relative">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                  className="absolute right-0 top-0 z-10 h-8 rounded-none rounded-tr-md border-l border-b px-2 text-xs"
+                className="absolute right-0 top-0 z-10 h-8 rounded-none rounded-tr-md border-l border-b px-2 text-xs"
                 onClick={() => commentFileInputRef.current?.click()}
               >
                 Insert media
@@ -582,35 +661,56 @@ export function BugDetailView({ bug, currentUserId, isAdmin }: BugDetailViewProp
                 type="file"
                 accept="image/*,video/mp4,video/quicktime,.mov"
                 className="hidden"
-                onChange={handleCommentFileChange}
+                onChange={(e) => handleMediaFileChange(e, commentRef, setCommentError)}
               />
               <Textarea
                 rows={3}
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
+                defaultValue=""
                 placeholder="Add a comment..."
                 className="pr-32 pt-10"
-                onPaste={handleCommentPaste}
-                onFocus={() => setIsCommentFocused(true)}
-                onBlur={() => setIsCommentFocused(false)}
+                onPaste={(e) => handleMediaPaste(e, commentRef, setCommentError)}
                 ref={commentRef}
               />
             </div>
-            {isCommentFocused && (
-              <p className="text-xs text-muted-foreground">
-                Paste an image or use &quot;Insert media&quot; to upload and embed images/video.
-              </p>
-            )}
+            <p className="min-h-4 text-xs text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100">
+              Paste an image or use &quot;Insert media&quot; to upload and embed images/video.
+            </p>
             <Button
               type="button"
               variant="outline"
               onClick={handleAddComment}
-              disabled={!commentText.trim()}
             >
               Add Comment
             </Button>
           </div>
         </div>
+        <AlertDialog
+          open={commentToDeleteId !== null}
+          onOpenChange={(open) => {
+            if (!open) setCommentToDeleteId(null)
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Comment</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete this comment? This will keep a deleted placeholder in the thread.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isCommentActionSubmitting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isCommentActionSubmitting || !commentToDeleteId}
+                className="bg-destructive text-white hover:bg-destructive/90"
+                onClick={() => {
+                  if (commentToDeleteId) void softDeleteComment(commentToDeleteId)
+                }}
+              >
+                {isCommentActionSubmitting ? "Deleting..." : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   )
