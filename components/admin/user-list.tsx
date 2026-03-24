@@ -376,9 +376,11 @@ export function AdminUserList({ users: initialUsers, userActivity = [] }: AdminU
                   <TableCell>
                     <Checkbox checked={selectedIds.includes(user.id)} onCheckedChange={() => toggleSelect(user.id)} />
                   </TableCell>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      {user.username || user.display_name || "—"}
+                  <TableCell className="font-medium whitespace-normal break-words">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="min-w-0 break-all">
+                        {user.username || user.display_name || "—"}
+                      </span>
                       {user.is_admin && (
                         <Badge variant="secondary" className="text-xs">
                           <Shield className="mr-1 h-3 w-3" />
@@ -392,8 +394,12 @@ export function AdminUserList({ users: initialUsers, userActivity = [] }: AdminU
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{user.email || "—"}</TableCell>
-                  <TableCell className="text-muted-foreground">{user.organisation || "—"}</TableCell>
+                  <TableCell className="text-muted-foreground whitespace-normal break-all">
+                    {user.email || "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground whitespace-normal break-words">
+                    {user.organisation || "—"}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{formatDateTime(user.created_at)}</TableCell>
                       <TableCell className="text-center">
                         <Switch checked={user.is_admin} onCheckedChange={() => handleToggleAdmin(user)} />
