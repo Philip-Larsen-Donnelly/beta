@@ -141,17 +141,33 @@ export async function updateBug(id: string, updates: Partial<Bug>) {
   })
 
   if (fields.length === 0) {
-    const { rows } = await query<Bug>("SELECT * FROM bugs WHERE id = $1", [id])
+    const { rows } = await query<Bug & { campaign_code: string | null }>(
+      `SELECT b.*, camp.code AS campaign_code
+       FROM bugs b
+       LEFT JOIN components c ON c.id = b.component_id
+       LEFT JOIN campaigns camp ON camp.id = c.campaign_id
+       WHERE b.id = $1`,
+      [id],
+    )
     return { success: true, bug: rows[0] }
   }
 
   values.push(new Date().toISOString(), id)
-  const { rows } = await query<Bug>(
+  await query(
     `UPDATE bugs
      SET ${fields.join(", ")}, updated_at = $${fields.length + 1}
      WHERE id = $${fields.length + 2}
-     RETURNING *`,
+     RETURNING id`,
     values,
+  )
+
+  const { rows } = await query<Bug & { campaign_code: string | null }>(
+    `SELECT b.*, camp.code AS campaign_code
+     FROM bugs b
+     LEFT JOIN components c ON c.id = b.component_id
+     LEFT JOIN campaigns camp ON camp.id = c.campaign_id
+     WHERE b.id = $1`,
+    [id],
   )
 
   return { success: true, bug: rows[0] }

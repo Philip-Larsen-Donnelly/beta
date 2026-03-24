@@ -160,6 +160,7 @@ export function AdminBugList({
     if (result.success && result.bug) {
       const existingBug = bugs.find((b) => b.id === id)
       const updatedBug: BugRow = {
+        ...(existingBug ?? ({} as BugRow)),
         ...result.bug,
         component: existingBug?.component ?? null,
         profile: existingBug?.profile ?? null,
