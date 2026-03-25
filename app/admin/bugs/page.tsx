@@ -22,11 +22,24 @@ export default async function AdminBugsPage() {
                 camp.code AS campaign_code,
                 p.display_name AS profile_display_name,
                 p.email AS profile_email,
-                (SELECT COUNT(*)::int FROM bug_votes bv WHERE bv.bug_id = b.id) AS vote_count
+                (SELECT COUNT(*)::int FROM bug_votes bv WHERE bv.bug_id = b.id) AS vote_count,
+                COALESCE(comment_stats.comment_count, 0) AS comment_count,
+                GREATEST(
+                  b.updated_at,
+                  COALESCE(comment_stats.last_comment_activity_at, b.updated_at)
+                ) AS last_activity_at
          FROM bugs b
          LEFT JOIN components c ON c.id = b.component_id
          LEFT JOIN campaigns camp ON camp.id = c.campaign_id
          LEFT JOIN profiles p ON p.id = b.user_id
+         LEFT JOIN LATERAL (
+           SELECT
+             COUNT(*)::int AS comment_count,
+             MAX(COALESCE(bc.updated_at, bc.created_at)) AS last_comment_activity_at
+           FROM bug_comments bc
+           WHERE bc.bug_id = b.id
+             AND bc.deleted_at IS NULL
+         ) comment_stats ON TRUE
          ORDER BY b.created_at DESC`,
       ),
       query(
@@ -42,6 +55,8 @@ export default async function AdminBugsPage() {
       bugsResult.rows?.map((b) => ({
         ...b,
         campaign_code: b.campaign_code ?? null,
+        comment_count: Number(b.comment_count ?? 0),
+        last_activity_at: b.last_activity_at ?? b.updated_at,
         component: b.component_id
           ? { name: b.component_name, campaign_id: b.component_campaign_id, campaign: { name: b.campaign_name } }
           : null,

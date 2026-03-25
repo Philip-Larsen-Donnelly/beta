@@ -141,11 +141,25 @@ export async function updateBug(id: string, updates: Partial<Bug>) {
   })
 
   if (fields.length === 0) {
-    const { rows } = await query<Bug & { campaign_code: string | null }>(
-      `SELECT b.*, camp.code AS campaign_code
+    const { rows } = await query<Bug & { campaign_code: string | null; comment_count: number; last_activity_at: string }>(
+      `SELECT b.*,
+              camp.code AS campaign_code,
+              COALESCE(comment_stats.comment_count, 0) AS comment_count,
+              GREATEST(
+                b.updated_at,
+                COALESCE(comment_stats.last_comment_activity_at, b.updated_at)
+              ) AS last_activity_at
        FROM bugs b
        LEFT JOIN components c ON c.id = b.component_id
        LEFT JOIN campaigns camp ON camp.id = c.campaign_id
+       LEFT JOIN LATERAL (
+         SELECT
+           COUNT(*)::int AS comment_count,
+           MAX(COALESCE(bc.updated_at, bc.created_at)) AS last_comment_activity_at
+         FROM bug_comments bc
+         WHERE bc.bug_id = b.id
+           AND bc.deleted_at IS NULL
+       ) comment_stats ON TRUE
        WHERE b.id = $1`,
       [id],
     )
@@ -161,11 +175,25 @@ export async function updateBug(id: string, updates: Partial<Bug>) {
     values,
   )
 
-  const { rows } = await query<Bug & { campaign_code: string | null }>(
-    `SELECT b.*, camp.code AS campaign_code
+  const { rows } = await query<Bug & { campaign_code: string | null; comment_count: number; last_activity_at: string }>(
+    `SELECT b.*,
+            camp.code AS campaign_code,
+            COALESCE(comment_stats.comment_count, 0) AS comment_count,
+            GREATEST(
+              b.updated_at,
+              COALESCE(comment_stats.last_comment_activity_at, b.updated_at)
+            ) AS last_activity_at
      FROM bugs b
      LEFT JOIN components c ON c.id = b.component_id
      LEFT JOIN campaigns camp ON camp.id = c.campaign_id
+     LEFT JOIN LATERAL (
+       SELECT
+         COUNT(*)::int AS comment_count,
+         MAX(COALESCE(bc.updated_at, bc.created_at)) AS last_comment_activity_at
+       FROM bug_comments bc
+       WHERE bc.bug_id = b.id
+         AND bc.deleted_at IS NULL
+     ) comment_stats ON TRUE
      WHERE b.id = $1`,
     [id],
   )
