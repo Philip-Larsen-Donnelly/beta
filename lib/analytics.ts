@@ -30,11 +30,16 @@ export interface StaleItem {
   user_id: string
   username: string | null
   display_name: string | null
+  organisation: string | null
+  last_campaign_activity: string
+  days_inactive: number
+  total_selected: number
+  completed: number
   component_id: string
   component_name: string
   status: string
-  updated_at: string
-  days_stale: number
+  status_updated_at: string
+  days_since_status_update: number
 }
 
 export interface UnresolvedBugRow {
@@ -209,25 +214,76 @@ export async function fetchComponentCoverage(campaignId: string): Promise<Compon
 }
 
 // -- Stale Work Tracker --
+// User-centric: only flags users whose *overall* campaign activity is stale,
+// not individual components that happen to be untouched while the user is
+// active elsewhere.
 
 export async function fetchStaleItems(campaignId: string, staleDays: number = 3): Promise<StaleItem[]> {
   const { rows } = await query<StaleItem>(
-    `SELECT
+    `WITH user_activity AS (
+       SELECT
+         p.id AS user_id,
+         GREATEST(
+           COALESCE((
+             SELECT MAX(ucs2.updated_at)
+             FROM user_component_status ucs2
+             INNER JOIN components c2 ON c2.id = ucs2.component_id AND c2.campaign_id = $1
+             WHERE ucs2.user_id = p.id AND ucs2.is_selected = true
+           ), 'epoch'::timestamptz),
+           COALESCE((
+             SELECT MAX(b.created_at)
+             FROM bugs b
+             INNER JOIN components c3 ON c3.id = b.component_id AND c3.campaign_id = $1
+             WHERE b.user_id = p.id
+           ), 'epoch'::timestamptz),
+           COALESCE((
+             SELECT MAX(COALESCE(bc.updated_at, bc.created_at))
+             FROM bug_comments bc
+             INNER JOIN bugs b2 ON b2.id = bc.bug_id
+             INNER JOIN components c4 ON c4.id = b2.component_id AND c4.campaign_id = $1
+             WHERE bc.user_id = p.id AND bc.deleted_at IS NULL
+           ), 'epoch'::timestamptz),
+           COALESCE((
+             SELECT MAX(bv.created_at)
+             FROM bug_votes bv
+             INNER JOIN bugs b3 ON b3.id = bv.bug_id
+             INNER JOIN components c5 ON c5.id = b3.component_id AND c5.campaign_id = $1
+             WHERE bv.user_id = p.id
+           ), 'epoch'::timestamptz)
+         ) AS last_campaign_activity
+       FROM profiles p
+       WHERE EXISTS (
+         SELECT 1 FROM user_component_status ucs
+         INNER JOIN components c ON c.id = ucs.component_id AND c.campaign_id = $1
+         WHERE ucs.user_id = p.id AND ucs.is_selected = true
+           AND ucs.status IN ('not_started', 'in_progress', 'blocked')
+       )
+     )
+     SELECT
        p.id AS user_id,
        p.username,
        p.display_name,
+       p.organisation,
+       ua.last_campaign_activity,
+       EXTRACT(DAY FROM NOW() - ua.last_campaign_activity)::int AS days_inactive,
+       (SELECT COUNT(*) FROM user_component_status ucs_t
+        INNER JOIN components ct ON ct.id = ucs_t.component_id AND ct.campaign_id = $1
+        WHERE ucs_t.user_id = p.id AND ucs_t.is_selected = true)::int AS total_selected,
+       (SELECT COUNT(*) FROM user_component_status ucs_c
+        INNER JOIN components cc ON cc.id = ucs_c.component_id AND cc.campaign_id = $1
+        WHERE ucs_c.user_id = p.id AND ucs_c.is_selected = true AND ucs_c.status = 'completed')::int AS completed,
        comp.id AS component_id,
        comp.name AS component_name,
        ucs.status,
-       ucs.updated_at,
-       EXTRACT(DAY FROM NOW() - ucs.updated_at)::int AS days_stale
-     FROM user_component_status ucs
-     INNER JOIN profiles p ON p.id = ucs.user_id
-     INNER JOIN components comp ON comp.id = ucs.component_id AND comp.campaign_id = $1
-     WHERE ucs.is_selected = true
+       ucs.updated_at AS status_updated_at,
+       EXTRACT(DAY FROM NOW() - ucs.updated_at)::int AS days_since_status_update
+     FROM user_activity ua
+     INNER JOIN profiles p ON p.id = ua.user_id
+     INNER JOIN user_component_status ucs ON ucs.user_id = p.id AND ucs.is_selected = true
        AND ucs.status IN ('not_started', 'in_progress', 'blocked')
-       AND ucs.updated_at < NOW() - MAKE_INTERVAL(days => $2)
-     ORDER BY days_stale DESC, ucs.status ASC`,
+     INNER JOIN components comp ON comp.id = ucs.component_id AND comp.campaign_id = $1
+     WHERE ua.last_campaign_activity < NOW() - MAKE_INTERVAL(days => $2)
+     ORDER BY ua.last_campaign_activity ASC, p.display_name ASC, comp.name ASC`,
     [campaignId, staleDays],
   )
   return rows
