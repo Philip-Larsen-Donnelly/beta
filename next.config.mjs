@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const isDev = process.env.NODE_ENV !== "production"
+
 const securityHeaders = [
   {
     key: "Content-Security-Policy",
@@ -8,12 +10,12 @@ const securityHeaders = [
       "form-action 'self'",
       "frame-ancestors 'none'",
       "object-src 'none'",
-      "script-src 'self' 'unsafe-inline'",
+      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "media-src 'self' data: blob: https://s3.eu-west-1.amazonaws.com https://drive.google.com https://docs.google.com https://*.googleusercontent.com",
       "font-src 'self' data:",
-      "connect-src 'self'",
+      `connect-src 'self'${isDev ? " ws: wss: http: https:" : ""}`,
       "frame-src 'self' https://drive.google.com https://docs.google.com",
     ].join('; '),
   },
@@ -36,6 +38,8 @@ const securityHeaders = [
 ]
 
 const nextConfig = {
+  // Allow dev client/HMR connections when accessing the app over LAN hostname/IP.
+  allowedDevOrigins: ["192.168.39.38", "localhost", "127.0.0.1"],
   typescript: {
     ignoreBuildErrors: true,
   },

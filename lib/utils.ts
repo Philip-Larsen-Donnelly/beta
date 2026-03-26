@@ -27,6 +27,18 @@ export function formatDateTime(date: string | Date | null | undefined): string {
   })
 }
 
+export function formatCompactDateTime(date: string | Date | null | undefined): string {
+  if (!date) return ""
+  const d = typeof date === "string" ? new Date(date) : date
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const
+  const dd = String(d.getDate()).padStart(2, "0")
+  const mmm = months[d.getMonth()]
+  const yyyy = d.getFullYear()
+  const hh = String(d.getHours()).padStart(2, "0")
+  const min = String(d.getMinutes()).padStart(2, "0")
+  return `${dd} ${mmm} ${yyyy}, ${hh}:${min}`
+}
+
 export function formatDateRange(start: string | null, end: string | null): string | null {
   if (!start && !end) return null
   if (start && end) return `${formatDate(start)} – ${formatDate(end)}`

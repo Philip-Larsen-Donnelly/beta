@@ -58,10 +58,23 @@ export default async function ComponentTestingPage({
 
   const { rows: bugs } = await query(
     `SELECT b.*,
-            (SELECT COUNT(*)::int FROM bug_votes bv WHERE bv.bug_id = b.id) AS vote_count
+            (SELECT COUNT(*)::int FROM bug_votes bv WHERE bv.bug_id = b.id) AS vote_count,
+            COALESCE(comment_stats.comment_count, 0) AS comment_count,
+            GREATEST(
+              b.updated_at,
+              COALESCE(comment_stats.last_comment_activity_at, b.updated_at)
+            ) AS last_activity_at
      FROM bugs b
+     LEFT JOIN LATERAL (
+       SELECT
+         COUNT(*)::int AS comment_count,
+         MAX(COALESCE(bc.updated_at, bc.created_at)) AS last_comment_activity_at
+       FROM bug_comments bc
+       WHERE bc.bug_id = b.id
+         AND bc.deleted_at IS NULL
+     ) comment_stats ON TRUE
      WHERE b.component_id = $1
-     ORDER BY b.created_at DESC`,
+     ORDER BY last_activity_at DESC`,
     [id],
   )
 

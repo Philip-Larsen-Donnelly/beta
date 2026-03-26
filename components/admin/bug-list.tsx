@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -21,18 +21,21 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Switch } from "@/components/ui/switch"
 import { MarkdownContent } from "@/components/markdown-content"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Search, Trash2, Link2, MoreHorizontal, AlertTriangle } from "lucide-react"
+  Search,
+  Trash2,
+  Link2,
+  AlertTriangle,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  MessageSquare,
+} from "lucide-react"
 import { updateBug, deleteBug, deleteBugs, attachBugToComponent, attachBugsToComponent } from "@/lib/actions"
 import type { Bug, BugStatus, BugSeverity, BugPriority } from "@/lib/types"
-import { cn, formatDateTime, formatBugRef, bugPermalink } from "@/lib/utils"
+import { cn, formatDateTime, formatCompactDateTime, formatBugRef, bugPermalink } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 
 const severityConfig: Record<string, string> = {
@@ -59,7 +62,21 @@ const severityOptions = [
 type BugRow = Bug & {
   component: { name: string; campaign_id: string | null; campaign: { name: string } | null } | null
   profile: { display_name: string | null; email: string | null } | null
+  comment_count?: number
+  last_activity_at?: string
 }
+
+type SortField =
+  | "title"
+  | "component"
+  | "reporter"
+  | "status"
+  | "severity"
+  | "priority"
+  | "comments"
+  | "reported"
+  | "last_updated"
+type SortDirection = "asc" | "desc"
 
 interface AdminBugListProps {
   bugs: BugRow[]
@@ -92,6 +109,9 @@ export function AdminBugList({
   const [filterComponent, setFilterComponent] = useState<string>("all")
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [filterSeverity, setFilterSeverity] = useState<string>("all")
+  const [sortField, setSortField] = useState<SortField>("last_updated")
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
+  const [allowDeletion, setAllowDeletion] = useState(false)
   const [selectedBug, setSelectedBug] = useState<(typeof bugs)[0] | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isDeleting, setIsDeleting] = useState(false)
@@ -124,27 +144,110 @@ export function AdminBugList({
 
   const activeCampaignIds = campaigns.filter(isCampaignActive).map((c) => c.id)
 
-  const filteredBugs = bugs.filter((bug) => {
-    if (search && !bug.title.toLowerCase().includes(search.toLowerCase())) return false
+  const filteredBugs = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return bugs.filter((bug) => {
+      if (q) {
+        const reporter = bug.profile?.display_name || bug.profile?.email || "unknown"
+        const componentName = bug.component?.name || "orphaned"
+        const campaignName = bug.component?.campaign?.name || ""
+        const ref = formatBugRef(bug.bug_number, bug.campaign_code) || ""
+        const haystack = `${bug.title} ${reporter} ${componentName} ${campaignName} ${ref}`.toLowerCase()
+        if (!haystack.includes(q)) return false
+      }
 
-    // Handle orphaned filter
-    if (filterCampaign === "orphaned") {
-      return bug.component_id === null
+      // Handle orphaned filter
+      if (filterCampaign === "orphaned") {
+        return bug.component_id === null
+      }
+
+      // Skip orphaned bugs for other filters unless explicitly showing all
+      if (filterCampaign !== "all" && bug.component_id === null) return false
+
+      if (filterCampaign === "active") {
+        if (!bug.component?.campaign_id || !activeCampaignIds.includes(bug.component.campaign_id)) return false
+      } else if (filterCampaign !== "all" && bug.component?.campaign_id !== filterCampaign) {
+        return false
+      }
+      if (filterComponent !== "all" && bug.component_id !== filterComponent) return false
+      if (filterStatus !== "all" && bug.status !== filterStatus) return false
+      if (filterSeverity !== "all" && bug.severity !== filterSeverity) return false
+      return true
+    })
+  }, [bugs, search, filterCampaign, activeCampaignIds, filterComponent, filterStatus, filterSeverity])
+
+  const sortedBugs = useMemo(() => {
+    const next = [...filteredBugs]
+    next.sort((a, b) => {
+      const reporterA = a.profile?.display_name || a.profile?.email || "unknown"
+      const reporterB = b.profile?.display_name || b.profile?.email || "unknown"
+      const valA: string | number = (() => {
+        switch (sortField) {
+          case "title":
+            return a.title
+          case "component":
+            return a.component?.name || ""
+          case "reporter":
+            return reporterA
+          case "status":
+            return a.status
+          case "severity":
+            return a.severity
+          case "priority":
+            return a.priority
+          case "comments":
+            return Number(a.comment_count ?? 0)
+          case "reported":
+            return new Date(a.created_at).getTime()
+          case "last_updated":
+            return new Date(a.last_activity_at || a.updated_at).getTime()
+        }
+      })()
+      const valB: string | number = (() => {
+        switch (sortField) {
+          case "title":
+            return b.title
+          case "component":
+            return b.component?.name || ""
+          case "reporter":
+            return reporterB
+          case "status":
+            return b.status
+          case "severity":
+            return b.severity
+          case "priority":
+            return b.priority
+          case "comments":
+            return Number(b.comment_count ?? 0)
+          case "reported":
+            return new Date(b.created_at).getTime()
+          case "last_updated":
+            return new Date(b.last_activity_at || b.updated_at).getTime()
+        }
+      })()
+
+      if (typeof valA === "number" && typeof valB === "number") {
+        return sortDirection === "asc" ? valA - valB : valB - valA
+      }
+      const cmp = String(valA).localeCompare(String(valB))
+      return sortDirection === "asc" ? cmp : -cmp
+    })
+    return next
+  }, [filteredBugs, sortField, sortDirection])
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
+    } else {
+      setSortField(field)
+      setSortDirection("asc")
     }
+  }
 
-    // Skip orphaned bugs for other filters unless explicitly showing all
-    if (filterCampaign !== "all" && bug.component_id === null) return false
-
-    if (filterCampaign === "active") {
-      if (!bug.component?.campaign_id || !activeCampaignIds.includes(bug.component.campaign_id)) return false
-    } else if (filterCampaign !== "all" && bug.component?.campaign_id !== filterCampaign) {
-      return false
-    }
-    if (filterComponent !== "all" && bug.component_id !== filterComponent) return false
-    if (filterStatus !== "all" && bug.status !== filterStatus) return false
-    if (filterSeverity !== "all" && bug.severity !== filterSeverity) return false
-    return true
-  })
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />
+    return sortDirection === "asc" ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
+  }
 
   const filteredComponents =
     filterCampaign === "all" || filterCampaign === "orphaned"
@@ -154,6 +257,12 @@ export function AdminBugList({
         : components.filter((c) => c.campaign_id === filterCampaign)
 
   const orphanedCount = bugs.filter((b) => b.component_id === null).length
+
+  useEffect(() => {
+    if (!allowDeletion) {
+      setSelectedIds(new Set())
+    }
+  }, [allowDeletion])
 
   const handleUpdateBug = async (id: string, updates: Partial<Bug>) => {
     const result = await updateBug(id, updates)
@@ -388,7 +497,7 @@ export function AdminBugList({
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedIds(new Set(filteredBugs.map((b) => b.id)))
+      setSelectedIds(new Set(sortedBugs.map((b) => b.id)))
     } else {
       setSelectedIds(new Set())
     }
@@ -551,67 +660,141 @@ export function AdminBugList({
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Showing {filteredBugs.length} of {bugs.length} bugs
-          {selectedIds.size > 0 && ` · ${selectedIds.size} selected`}
+          Showing {sortedBugs.length} of {bugs.length} bugs
+          {allowDeletion && selectedIds.size > 0 && ` · ${selectedIds.size} selected`}
         </p>
-        {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            {filterCampaign === "orphaned" && (
-              <Button variant="outline" size="sm" onClick={() => openAttachDialog(Array.from(selectedIds))}>
-                <Link2 className="h-4 w-4 mr-2" />
-                Attach to Component
-              </Button>
-            )}
-            <Button variant="destructive" size="sm" onClick={handleBulkDelete} disabled={isDeleting}>
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete ({selectedIds.size})
-            </Button>
+            <Label htmlFor="allow-delete-bugs" className="text-sm text-muted-foreground">
+              {allowDeletion ? "Allow deletion (cannot be undone)" : "Allow deletion"}
+            </Label>
+            <Switch id="allow-delete-bugs" checked={allowDeletion} onCheckedChange={setAllowDeletion} />
           </div>
-        )}
+          {allowDeletion && selectedIds.size > 0 && (
+            <div className="flex items-center gap-2">
+              {filterCampaign === "orphaned" && (
+                <Button variant="outline" size="sm" onClick={() => openAttachDialog(Array.from(selectedIds))}>
+                  <Link2 className="h-4 w-4 mr-2" />
+                  Attach to Component
+                </Button>
+              )}
+              <Button variant="destructive" size="sm" onClick={handleBulkDelete} disabled={isDeleting}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete ({selectedIds.size})
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="rounded-md border">
-        <Table>
+        <Table className="table-fixed [&_th]:h-8 [&_th]:px-1 [&_th]:py-1 [&_th]:text-[12px] [&_td]:px-1 [&_td]:py-1 [&_td]:text-[12px] [&_th]:whitespace-normal [&_td]:whitespace-normal">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-10">
-                <Checkbox
-                  checked={filteredBugs.length > 0 && selectedIds.size === filteredBugs.length}
-                  onCheckedChange={handleSelectAll}
-                />
+              {allowDeletion && (
+                <TableHead className="w-10 !px-2 !py-0 text-center whitespace-nowrap">
+                  <Checkbox
+                    className="h-4 w-4"
+                    checked={filteredBugs.length > 0 && selectedIds.size === filteredBugs.length}
+                    onCheckedChange={handleSelectAll}
+                  />
+                </TableHead>
+              )}
+              <TableHead className="w-[39%] whitespace-normal">
+                <button onClick={() => toggleSort("title")} className="flex items-center font-medium hover:text-foreground">
+                  Title
+                  <SortIcon field="title" />
+                </button>
               </TableHead>
-              <TableHead>Title</TableHead>
-              <TableHead>Campaign</TableHead>
-              <TableHead>Component</TableHead>
-              <TableHead>Reporter</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Severity</TableHead>
-              <TableHead>Priority</TableHead>
-              <TableHead className="text-right">Reported</TableHead>
-              <TableHead className="w-10"></TableHead>
+              <TableHead className="w-[10%]">
+                <button onClick={() => toggleSort("component")} className="flex items-center font-medium hover:text-foreground">
+                  Component
+                  <SortIcon field="component" />
+                </button>
+              </TableHead>
+              <TableHead className="w-[10%]">
+                <button onClick={() => toggleSort("reporter")} className="flex items-center font-medium hover:text-foreground">
+                  Reporter
+                  <SortIcon field="reporter" />
+                </button>
+              </TableHead>
+              <TableHead className="w-[6%]">
+                <button onClick={() => toggleSort("status")} className="flex items-center font-medium hover:text-foreground">
+                  Status
+                  <SortIcon field="status" />
+                </button>
+              </TableHead>
+              <TableHead className="w-[6%]">
+                <button onClick={() => toggleSort("severity")} className="flex items-center font-medium hover:text-foreground">
+                  Severity
+                  <SortIcon field="severity" />
+                </button>
+              </TableHead>
+              <TableHead className="w-[6%]">
+                <button onClick={() => toggleSort("priority")} className="flex items-center font-medium hover:text-foreground">
+                  Priority
+                  <SortIcon field="priority" />
+                </button>
+              </TableHead>
+              <TableHead className="w-[6%] text-center">
+                <button
+                  onClick={() => toggleSort("comments")}
+                  className="flex w-full items-center justify-center font-medium hover:text-foreground"
+                >
+                  Comments
+                  <SortIcon field="comments" />
+                </button>
+              </TableHead>
+              <TableHead className="w-[8%] text-right">
+                <button
+                  onClick={() => toggleSort("reported")}
+                  className="ml-auto flex items-center font-medium hover:text-foreground"
+                >
+                  Reported
+                  <SortIcon field="reported" />
+                </button>
+              </TableHead>
+              <TableHead className="w-[8%] text-right">
+                <button
+                  onClick={() => toggleSort("last_updated")}
+                  className="ml-auto flex items-center font-medium hover:text-foreground"
+                >
+                  Last Updated
+                  <SortIcon field="last_updated" />
+                </button>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredBugs.length === 0 ? (
+            {sortedBugs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={allowDeletion ? 10 : 9} className="h-24 text-center text-muted-foreground">
                   {filterCampaign === "orphaned" ? "No orphaned bugs found." : "No bugs found matching your filters."}
                 </TableCell>
               </TableRow>
             ) : (
-              filteredBugs.map((bug) => (
+              sortedBugs.map((bug) => (
                 <TableRow
                   key={bug.id}
-                  className={cn("cursor-pointer hover:bg-muted/50", selectedIds.has(bug.id) && "bg-primary/5")}
+                  className={cn(
+                    "cursor-pointer hover:bg-muted/50",
+                    allowDeletion && selectedIds.has(bug.id) && "bg-primary/5",
+                  )}
                 >
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Checkbox
-                      checked={selectedIds.has(bug.id)}
-                      onCheckedChange={(checked) => handleSelectOne(bug.id, !!checked)}
-                    />
-                  </TableCell>
+                  {allowDeletion && (
+                    <TableCell
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-10 !px-2 !py-0 text-center whitespace-nowrap"
+                    >
+                      <Checkbox
+                        className="h-4 w-4"
+                        checked={selectedIds.has(bug.id)}
+                        onCheckedChange={(checked) => handleSelectOne(bug.id, !!checked)}
+                      />
+                    </TableCell>
+                  )}
                   <TableCell onClick={() => setSelectedBug(bug)}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex w-full items-start gap-2">
                       {formatBugRef(bug.bug_number, bug.campaign_code) && (
                         <a
                           href={bugPermalink(bug.bug_number, bug.campaign_code) || "#"}
@@ -621,15 +804,12 @@ export function AdminBugList({
                           {formatBugRef(bug.bug_number, bug.campaign_code)}
                         </a>
                       )}
-                      <span className="text-sm font-medium block max-w-[260px] break-words whitespace-normal">
+                      <span className="block min-w-0 flex-1 whitespace-normal break-words text-[12px] font-medium">
                         {bug.title}
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell onClick={() => setSelectedBug(bug)} className="text-sm text-muted-foreground">
-                    {bug.component?.campaign?.name || "—"}
-                  </TableCell>
-                  <TableCell onClick={() => setSelectedBug(bug)} className="text-sm">
+                  <TableCell onClick={() => setSelectedBug(bug)} className="whitespace-normal break-words leading-tight">
                     {bug.component?.name || (
                       <span className="flex items-center gap-1 text-amber-600">
                         <AlertTriangle className="h-3 w-3" />
@@ -637,11 +817,11 @@ export function AdminBugList({
                       </span>
                     )}
                   </TableCell>
-                  <TableCell onClick={() => setSelectedBug(bug)} className="text-sm">
-                    <div className="flex items-center gap-2">
-                      <span>{bug.profile?.display_name || bug.profile?.email || "Unknown"}</span>
+                  <TableCell onClick={() => setSelectedBug(bug)} className="whitespace-normal break-words leading-tight">
+                    <div className="flex items-center gap-1">
+                      <span className="break-all">{bug.profile?.display_name || bug.profile?.email || "Unknown"}</span>
                       {Number(bug.vote_count ?? 0) > 0 && (
-                        <Badge variant="outline" className="text-sm">
+                        <Badge variant="outline" className="text-xs">
                           +{bug.vote_count}
                         </Badge>
                       )}
@@ -662,31 +842,21 @@ export function AdminBugList({
                       {bug.priority}
                     </Badge>
                   </TableCell>
-                  <TableCell onClick={() => setSelectedBug(bug)} className="text-right text-sm text-muted-foreground">
-                    {formatDistanceToNow(new Date(bug.created_at), { addSuffix: true })}
+                  <TableCell onClick={() => setSelectedBug(bug)} className="text-center">
+                    {Number(bug.comment_count ?? 0) > 0 ? (
+                      <Badge variant="secondary" className="text-xs">
+                        <MessageSquare className="mr-1 h-3 w-3" />
+                        {bug.comment_count}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground/50">—</span>
+                    )}
                   </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setSelectedBug(bug)}>View Details</DropdownMenuItem>
-                        {bug.component_id === null && (
-                          <DropdownMenuItem onClick={() => openAttachDialog([bug.id])}>
-                            <Link2 className="h-4 w-4 mr-2" />
-                            Attach to Component
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteBug(bug.id)}>
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                  <TableCell onClick={() => setSelectedBug(bug)} className="text-right text-muted-foreground whitespace-nowrap">
+                    {formatCompactDateTime(bug.created_at)}
+                  </TableCell>
+                  <TableCell onClick={() => setSelectedBug(bug)} className="text-right text-muted-foreground whitespace-nowrap">
+                    {formatCompactDateTime(bug.last_activity_at || bug.updated_at)}
                   </TableCell>
                 </TableRow>
               ))
@@ -989,11 +1159,13 @@ export function AdminBugList({
                 </div>
               </div>
 
-              <div className="flex justify-between">
-                <Button variant="destructive" onClick={() => handleDeleteBug(selectedBug.id)} disabled={isDeleting}>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Bug
-                </Button>
+              <div className="flex justify-end gap-2">
+                {allowDeletion && (
+                  <Button variant="destructive" onClick={() => handleDeleteBug(selectedBug.id)} disabled={isDeleting}>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Bug
+                  </Button>
+                )}
                 <Button variant="outline" onClick={() => setSelectedBug(null)}>
                   Close
                 </Button>
