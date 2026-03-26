@@ -1,5 +1,6 @@
 "use client"
 
+import { useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -16,7 +17,7 @@ import type {
   StaleItem,
   UnresolvedBugRow,
 } from "@/lib/analytics"
-import { formatBugRef } from "@/lib/utils"
+import { formatBugRef, formatCompactDateTime } from "@/lib/utils"
 
 interface ProgressDashboardProps {
   campaigns: Campaign[]
@@ -89,6 +90,45 @@ export function ProgressDashboard({
     params.set("tab", tab)
     router.push(`/admin/progress?${params.toString()}`)
   }
+
+  const staleUsers = useMemo(() => {
+    const grouped = new Map<string, {
+      user_id: string
+      display_name: string | null
+      username: string | null
+      organisation: string | null
+      last_campaign_activity: string
+      days_inactive: number
+      total_selected: number
+      completed: number
+      components: { component_id: string; component_name: string; status: string; status_updated_at: string; days_since_status_update: number }[]
+    }>()
+    for (const item of staleItems) {
+      let user = grouped.get(item.user_id)
+      if (!user) {
+        user = {
+          user_id: item.user_id,
+          display_name: item.display_name,
+          username: item.username,
+          organisation: item.organisation,
+          last_campaign_activity: item.last_campaign_activity,
+          days_inactive: item.days_inactive,
+          total_selected: item.total_selected,
+          completed: item.completed,
+          components: [],
+        }
+        grouped.set(item.user_id, user)
+      }
+      user.components.push({
+        component_id: item.component_id,
+        component_name: item.component_name,
+        status: item.status,
+        status_updated_at: item.status_updated_at,
+        days_since_status_update: item.days_since_status_update,
+      })
+    }
+    return Array.from(grouped.values())
+  }, [staleItems])
 
   const totalTesters = userProgress.length
   const totalComponents = componentCoverage.length
@@ -173,9 +213,9 @@ export function ProgressDashboard({
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Needs Follow-up</p>
-                    <p className="text-2xl font-bold">{staleItems.length + unresolvedBugs.length}</p>
+                    <p className="text-2xl font-bold">{staleUsers.length + unresolvedBugs.length}</p>
                     <p className="text-xs text-muted-foreground">
-                      {staleItems.length} stale · {unresolvedBugs.length} unresolved bugs
+                      {staleUsers.length} inactive user{staleUsers.length !== 1 ? "s" : ""} · {unresolvedBugs.length} unresolved bugs
                     </p>
                   </div>
                 </div>
@@ -189,10 +229,10 @@ export function ProgressDashboard({
               <TabsTrigger value="users">Per-User Progress</TabsTrigger>
               <TabsTrigger value="components">Per-Component Coverage</TabsTrigger>
               <TabsTrigger value="stale">
-                Stale Items
-                {staleItems.length > 0 && (
+                Inactive Users
+                {staleUsers.length > 0 && (
                   <Badge variant="destructive" className="ml-1.5 h-5 px-1.5 text-xs">
-                    {staleItems.length}
+                    {staleUsers.length}
                   </Badge>
                 )}
               </TabsTrigger>
@@ -367,45 +407,84 @@ export function ProgressDashboard({
               </div>
             </TabsContent>
 
-            {/* Stale Items */}
+            {/* Inactive Users */}
             <TabsContent value="stale">
-              {staleItems.length === 0 ? (
+              {staleUsers.length === 0 ? (
                 <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
                   <Clock className="mx-auto h-8 w-8 mb-2 opacity-50" />
-                  <p>No stale items found. All selections have been updated within the last 3 days.</p>
+                  <p>No inactive users found. All testers have had activity within the last 3 days.</p>
                 </div>
               ) : (
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>User</TableHead>
-                        <TableHead>Component</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-center">Days Stale</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {staleItems.map((item, i) => (
-                        <TableRow key={`${item.user_id}-${item.component_id}-${i}`}>
-                          <TableCell className="font-medium">
-                            {item.display_name || item.username || "—"}
-                          </TableCell>
-                          <TableCell className="whitespace-normal break-words max-w-[300px]">
-                            {item.component_name}
-                          </TableCell>
-                          <TableCell>
-                            <StatusBadge status={item.status} />
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <span className={item.days_stale >= 7 ? "text-red-600 font-medium" : "text-orange-600"}>
-                              {item.days_stale}d
-                            </span>
-                          </TableCell>
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Users with no campaign activity (status changes, bug reports, or comments) in the last 3 days who still have incomplete components.
+                  </p>
+                  <div className="rounded-md border">
+                    <Table className="[&_th]:text-[12px] [&_td]:text-[12px]">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[22%]">User</TableHead>
+                          <TableHead className="w-[30%]">Component</TableHead>
+                          <TableHead className="w-[10%]">Status</TableHead>
+                          <TableHead className="w-[14%]">Last Active</TableHead>
+                          <TableHead className="w-[10%] text-center">Inactive</TableHead>
+                          <TableHead className="w-[14%]">Progress</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {staleUsers.map((user) => (
+                          user.components.map((comp, ci) => (
+                            <TableRow
+                              key={`${user.user_id}-${comp.component_id}`}
+                              className={ci === 0 ? "border-t-2" : undefined}
+                            >
+                              {ci === 0 ? (
+                                <TableCell rowSpan={user.components.length} className="align-top font-medium">
+                                  <div>
+                                    <p>{user.display_name || user.username || "—"}</p>
+                                    {user.organisation && (
+                                      <p className="text-xs text-muted-foreground">{user.organisation}</p>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              ) : null}
+                              <TableCell className="whitespace-normal break-words">
+                                {comp.component_name}
+                              </TableCell>
+                              <TableCell>
+                                <StatusBadge status={comp.status} />
+                              </TableCell>
+                              {ci === 0 ? (
+                                <TableCell rowSpan={user.components.length} className="align-top text-muted-foreground whitespace-nowrap">
+                                  {formatCompactDateTime(user.last_campaign_activity)}
+                                </TableCell>
+                              ) : null}
+                              {ci === 0 ? (
+                                <TableCell rowSpan={user.components.length} className="align-top text-center">
+                                  <span className={user.days_inactive >= 7 ? "text-red-600 font-medium" : "text-orange-600"}>
+                                    {user.days_inactive}d
+                                  </span>
+                                </TableCell>
+                              ) : null}
+                              {ci === 0 ? (
+                                <TableCell rowSpan={user.components.length} className="align-top">
+                                  <div className="flex items-center gap-2">
+                                    <Progress
+                                      value={user.total_selected > 0 ? Math.round((user.completed / user.total_selected) * 100) : 0}
+                                      className="flex-1"
+                                    />
+                                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                      {user.completed}/{user.total_selected}
+                                    </span>
+                                  </div>
+                                </TableCell>
+                              ) : null}
+                            </TableRow>
+                          ))
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               )}
             </TabsContent>
