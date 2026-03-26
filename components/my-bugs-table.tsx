@@ -1,9 +1,11 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { ArrowDown, ArrowUp, ArrowUpDown, MessageSquare, Search } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -24,6 +26,7 @@ type MyBugRow = Bug & {
 type SortField =
   | "title"
   | "component"
+  | "reporter"
   | "status"
   | "severity"
   | "priority"
@@ -31,6 +34,8 @@ type SortField =
   | "reported"
   | "last_updated"
 type SortDirection = "asc" | "desc"
+
+const SHOW_ALL_KEY = "myBugsTable_showAll"
 
 const severityConfig: Record<string, string> = {
   low: "bg-muted text-muted-foreground",
@@ -60,6 +65,21 @@ export function MyBugsTable({ bugs, currentUserId, isAdmin }: MyBugsTableProps) 
   const [sortField, setSortField] = useState<SortField>("last_updated")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
   const [selectedBug, setSelectedBug] = useState<MyBugRow | null>(null)
+  const [showAll, setShowAll] = useState(false)
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SHOW_ALL_KEY)
+      if (stored === "true") setShowAll(true)
+    } catch {}
+  }, [])
+
+  const handleToggleShowAll = (v: boolean) => {
+    setShowAll(v)
+    try {
+      localStorage.setItem(SHOW_ALL_KEY, String(v))
+    } catch {}
+  }
 
   const campaignNames = useMemo(() => {
     return Array.from(new Set(bugs.map((b) => b.campaign_name).filter((v): v is string => Boolean(v)))).sort((a, b) =>
@@ -67,12 +87,19 @@ export function MyBugsTable({ bugs, currentUserId, isAdmin }: MyBugsTableProps) 
     )
   }, [bugs])
 
+  const visibleBugCount = useMemo(
+    () => (showAll ? bugs.length : bugs.filter((b) => b.user_id === currentUserId).length),
+    [bugs, showAll, currentUserId],
+  )
+
   const filteredBugs = useMemo(() => {
     const q = search.trim().toLowerCase()
     return bugs.filter((bug) => {
+      if (!showAll && bug.user_id !== currentUserId) return false
       if (q) {
         const ref = formatBugRef(bug.bug_number, bug.campaign_code) || ""
-        const haystack = `${bug.title} ${bug.campaign_name || ""} ${bug.component_name || ""} ${ref}`.toLowerCase()
+        const reporter = bug.profile_display_name || bug.profile_email || ""
+        const haystack = `${bug.title} ${bug.campaign_name || ""} ${bug.component_name || ""} ${reporter} ${ref}`.toLowerCase()
         if (!haystack.includes(q)) return false
       }
       if (filterCampaign !== "all" && bug.campaign_name !== filterCampaign) return false
@@ -80,7 +107,7 @@ export function MyBugsTable({ bugs, currentUserId, isAdmin }: MyBugsTableProps) 
       if (filterSeverity !== "all" && bug.severity !== filterSeverity) return false
       return true
     })
-  }, [bugs, search, filterCampaign, filterStatus, filterSeverity])
+  }, [bugs, search, filterCampaign, filterStatus, filterSeverity, showAll, currentUserId])
 
   const sortedBugs = useMemo(() => {
     const next = [...filteredBugs]
@@ -91,6 +118,8 @@ export function MyBugsTable({ bugs, currentUserId, isAdmin }: MyBugsTableProps) 
             return a.title
           case "component":
             return a.component_name || ""
+          case "reporter":
+            return a.profile_display_name || a.profile_email || ""
           case "status":
             return a.status
           case "severity":
@@ -111,6 +140,8 @@ export function MyBugsTable({ bugs, currentUserId, isAdmin }: MyBugsTableProps) 
             return b.title
           case "component":
             return b.component_name || ""
+          case "reporter":
+            return b.profile_display_name || b.profile_email || ""
           case "status":
             return b.status
           case "severity":
@@ -150,18 +181,24 @@ export function MyBugsTable({ bugs, currentUserId, isAdmin }: MyBugsTableProps) 
 
   return (
     <div className="space-y-4 rounded-lg border p-4">
-      <div className="space-y-1">
-        <h2 className="text-lg font-semibold">All My Bugs</h2>
-        <p className="text-sm text-muted-foreground">
-          {sortedBugs.length} of {bugs.length} bug{bugs.length !== 1 ? "s" : ""} shown
-        </p>
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold">{showAll ? "All Bugs" : "All My Bugs"}</h2>
+          <p className="text-sm text-muted-foreground">
+            {sortedBugs.length} of {visibleBugCount} bug{visibleBugCount !== 1 ? "s" : ""} shown
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch id="show-all-bugs" checked={showAll} onCheckedChange={handleToggleShowAll} />
+          <Label htmlFor="show-all-bugs" className="text-sm">Show bugs from all users</Label>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search your bugs..."
+            placeholder={showAll ? "Search all bugs..." : "Search your bugs..."}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -210,18 +247,26 @@ export function MyBugsTable({ bugs, currentUserId, isAdmin }: MyBugsTableProps) 
         <Table className="table-fixed [&_th]:h-8 [&_th]:px-1 [&_th]:py-1 [&_th]:text-[12px] [&_td]:px-1 [&_td]:py-1 [&_td]:text-[12px] [&_th]:whitespace-normal [&_td]:whitespace-normal">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[42%] whitespace-normal">
+              <TableHead className={showAll ? "w-[33%] whitespace-normal" : "w-[42%] whitespace-normal"}>
                 <button onClick={() => toggleSort("title")} className="flex items-center font-medium hover:text-foreground">
                   Title
                   <SortIcon field="title" />
                 </button>
               </TableHead>
-              <TableHead className="w-[11%]">
+              <TableHead className={showAll ? "w-[10%]" : "w-[11%]"}>
                 <button onClick={() => toggleSort("component")} className="flex items-center font-medium hover:text-foreground">
                   Component
                   <SortIcon field="component" />
                 </button>
               </TableHead>
+              {showAll && (
+                <TableHead className="w-[10%]">
+                  <button onClick={() => toggleSort("reporter")} className="flex items-center font-medium hover:text-foreground">
+                    Reporter
+                    <SortIcon field="reporter" />
+                  </button>
+                </TableHead>
+              )}
               <TableHead className="w-[7%]">
                 <button onClick={() => toggleSort("status")} className="flex items-center font-medium hover:text-foreground">
                   Status
@@ -272,13 +317,20 @@ export function MyBugsTable({ bugs, currentUserId, isAdmin }: MyBugsTableProps) 
           <TableBody>
             {sortedBugs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={showAll ? 9 : 8} className="h-24 text-center text-muted-foreground">
                   No bugs found matching your filters.
                 </TableCell>
               </TableRow>
             ) : (
               sortedBugs.map((bug) => (
-                <TableRow key={bug.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedBug(bug)}>
+                <TableRow
+                  key={bug.id}
+                  className={cn(
+                    "cursor-pointer hover:bg-muted/50",
+                    showAll && bug.user_id === currentUserId && "bg-muted/30",
+                  )}
+                  onClick={() => setSelectedBug(bug)}
+                >
                   <TableCell>
                     <div className="flex w-full items-start gap-2">
                       {formatBugRef(bug.bug_number, bug.campaign_code) && (
@@ -298,6 +350,11 @@ export function MyBugsTable({ bugs, currentUserId, isAdmin }: MyBugsTableProps) 
                   <TableCell className="whitespace-normal break-words leading-tight">
                     {bug.component_name || "—"}
                   </TableCell>
+                  {showAll && (
+                    <TableCell className="whitespace-normal break-words leading-tight">
+                      {bug.profile_display_name || bug.profile_email || "—"}
+                    </TableCell>
+                  )}
                   <TableCell>
                     <Badge variant="outline" className={cn("text-xs", statusConfig[bug.status])}>
                       {bug.status}

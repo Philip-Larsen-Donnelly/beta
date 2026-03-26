@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { ArrowDown, ArrowUp, ArrowUpDown, MessageSquare } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -22,11 +23,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Checkbox } from "@/components/ui/checkbox"
 import type { Bug, BugSeverity, BugPriority, BugStatus } from "@/lib/types"
-import { cn, formatBugRef, bugPermalink } from "@/lib/utils"
+import { cn, formatBugRef, bugPermalink, formatCompactDateTime } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 import { Bug as BugIcon, Eye, Pencil } from "lucide-react"
 import { updateBug } from "@/lib/actions"
 import { MarkdownContent } from "@/components/markdown-content"
+
+type TableSortField = "title" | "reporter" | "status" | "severity" | "priority" | "comments" | "reported" | "last_updated"
+type TableSortDirection = "asc" | "desc"
 
 type BugCommentItem = {
   id: string
@@ -61,7 +65,11 @@ const severityOptions = [
 ] as const
 
 interface BugListProps {
-  bugs: (Bug & { profile: { display_name: string | null; email: string | null } | null })[]
+  bugs: (Bug & {
+    profile: { display_name: string | null; email: string | null } | null
+    comment_count?: number
+    last_activity_at?: string
+  })[]
   currentUserId: string
   isAdmin: boolean
   onBugUpdated: () => void
@@ -70,6 +78,8 @@ interface BugListProps {
 }
 
 export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = "table", maxItems }: BugListProps) {
+  const [tableSortField, setTableSortField] = useState<TableSortField>("last_updated")
+  const [tableSortDirection, setTableSortDirection] = useState<TableSortDirection>("desc")
   const [editingBug, setEditingBug] = useState<Bug | null>(null)
   const [editTitle, setEditTitle] = useState("")
   const [editDescription, setEditDescription] = useState("")
@@ -507,96 +517,214 @@ export function BugList({ bugs, currentUserId, isAdmin, onBugUpdated, variant = 
     )
   }
 
+  const toggleTableSort = (field: TableSortField) => {
+    if (tableSortField === field) {
+      setTableSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
+    } else {
+      setTableSortField(field)
+      setTableSortDirection("asc")
+    }
+  }
+
+  const TableSortIcon = ({ field }: { field: TableSortField }) => {
+    if (tableSortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />
+    return tableSortDirection === "asc" ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
+  }
+
+  const sortedBugs = useMemo(() => {
+    const next = [...bugs]
+    next.sort((a, b) => {
+      const valA: string | number = (() => {
+        switch (tableSortField) {
+          case "title":
+            return a.title
+          case "reporter":
+            return a.profile?.display_name || a.profile?.email || ""
+          case "status":
+            return a.status
+          case "severity":
+            return a.severity
+          case "priority":
+            return a.priority
+          case "comments":
+            return Number(a.comment_count ?? 0)
+          case "reported":
+            return new Date(a.created_at).getTime()
+          case "last_updated":
+            return new Date(a.last_activity_at || a.updated_at).getTime()
+        }
+      })()
+      const valB: string | number = (() => {
+        switch (tableSortField) {
+          case "title":
+            return b.title
+          case "reporter":
+            return b.profile?.display_name || b.profile?.email || ""
+          case "status":
+            return b.status
+          case "severity":
+            return b.severity
+          case "priority":
+            return b.priority
+          case "comments":
+            return Number(b.comment_count ?? 0)
+          case "reported":
+            return new Date(b.created_at).getTime()
+          case "last_updated":
+            return new Date(b.last_activity_at || b.updated_at).getTime()
+        }
+      })()
+      if (typeof valA === "number" && typeof valB === "number") {
+        return tableSortDirection === "asc" ? valA - valB : valB - valA
+      }
+      const cmp = String(valA).localeCompare(String(valB))
+      return tableSortDirection === "asc" ? cmp : -cmp
+    })
+    return next
+  }, [bugs, tableSortField, tableSortDirection])
+
   // Table variant for full lists
   const renderTable = () => (
     <div className="rounded-md border">
-      <Table>
+      <Table className="table-fixed [&_th]:h-8 [&_th]:px-1 [&_th]:py-1 [&_th]:text-[12px] [&_td]:px-1 [&_td]:py-1 [&_td]:text-[12px] [&_th]:whitespace-normal [&_td]:whitespace-normal">
         <TableHeader>
           <TableRow>
-            <TableHead>Title</TableHead>
-            <TableHead className="whitespace-nowrap">Reporter</TableHead>
-            <TableHead className="whitespace-nowrap">Status</TableHead>
-            <TableHead className="whitespace-nowrap">Severity</TableHead>
-            <TableHead className="whitespace-nowrap">Priority</TableHead>
-            <TableHead className="text-right whitespace-nowrap">Reported</TableHead>
-            <TableHead className="w-[50px]"></TableHead>
+            <TableHead className="w-[35%] whitespace-normal">
+              <button onClick={() => toggleTableSort("title")} className="flex items-center font-medium hover:text-foreground">
+                Title
+                <TableSortIcon field="title" />
+              </button>
+            </TableHead>
+            <TableHead className="w-[12%]">
+              <button onClick={() => toggleTableSort("reporter")} className="flex items-center font-medium hover:text-foreground">
+                Reporter
+                <TableSortIcon field="reporter" />
+              </button>
+            </TableHead>
+            <TableHead className="w-[7%]">
+              <button onClick={() => toggleTableSort("status")} className="flex items-center font-medium hover:text-foreground">
+                Status
+                <TableSortIcon field="status" />
+              </button>
+            </TableHead>
+            <TableHead className="w-[7%]">
+              <button onClick={() => toggleTableSort("severity")} className="flex items-center font-medium hover:text-foreground">
+                Severity
+                <TableSortIcon field="severity" />
+              </button>
+            </TableHead>
+            <TableHead className="w-[7%]">
+              <button onClick={() => toggleTableSort("priority")} className="flex items-center font-medium hover:text-foreground">
+                Priority
+                <TableSortIcon field="priority" />
+              </button>
+            </TableHead>
+            <TableHead className="w-[6%] text-center">
+              <button
+                onClick={() => toggleTableSort("comments")}
+                className="flex w-full items-center justify-center font-medium hover:text-foreground"
+              >
+                Comments
+                <TableSortIcon field="comments" />
+              </button>
+            </TableHead>
+            <TableHead className="w-[12%] text-right">
+              <button
+                onClick={() => toggleTableSort("reported")}
+                className="ml-auto flex items-center font-medium hover:text-foreground"
+              >
+                Reported
+                <TableSortIcon field="reported" />
+              </button>
+            </TableHead>
+            <TableHead className="w-[14%] text-right">
+              <button
+                onClick={() => toggleTableSort("last_updated")}
+                className="ml-auto flex items-center font-medium hover:text-foreground"
+              >
+                Last Updated
+                <TableSortIcon field="last_updated" />
+              </button>
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {bugs.map((bug) => {
-            const isOwnBug = bug.user_id === currentUserId
-            const canEdit = isAdmin || isOwnBug
-
-            return (
-              <TableRow key={bug.id} className={cn(isOwnBug && "bg-primary/5")}>
-                <TableCell className="max-w-[300px]">
-                  <div className="flex items-start gap-2">
-                    {formatBugRef(bug.bug_number, bug.campaign_code) && (
-                      <a
-                        href={bugPermalink(bug.bug_number, bug.campaign_code) || "#"}
-                        className="font-mono text-xs text-muted-foreground hover:text-primary shrink-0 mt-0.5"
-                      >
-                        {formatBugRef(bug.bug_number, bug.campaign_code)}
-                      </a>
-                    )}
-                    <span className="text-sm font-medium break-words whitespace-normal">
-                      {bug.title}
-                    </span>
-                    {isOwnBug && (
-                      <Badge variant="outline" className="text-xs shrink-0 mt-0.5">
-                        Yours
+          {sortedBugs.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                No bugs reported yet.
+              </TableCell>
+            </TableRow>
+          ) : (
+            sortedBugs.map((bug) => {
+              const isOwnBug = bug.user_id === currentUserId
+              return (
+                <TableRow
+                  key={bug.id}
+                  className={cn("cursor-pointer hover:bg-muted/50", isOwnBug && "bg-muted/30")}
+                  onClick={() => openEditDialog(bug)}
+                >
+                  <TableCell>
+                    <div className="flex w-full items-start gap-2">
+                      {formatBugRef(bug.bug_number, bug.campaign_code) && (
+                        <a
+                          href={bugPermalink(bug.bug_number, bug.campaign_code) || "#"}
+                          onClick={(e) => e.stopPropagation()}
+                          className="shrink-0 font-mono text-xs text-muted-foreground hover:text-primary"
+                        >
+                          {formatBugRef(bug.bug_number, bug.campaign_code)}
+                        </a>
+                      )}
+                      <span className="block min-w-0 flex-1 whitespace-normal break-words text-[12px] font-medium">
+                        {bug.title}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-normal break-words leading-tight">
+                    <div className="flex items-center gap-1">
+                      <span>{bug.profile?.display_name || bug.profile?.email || "Unknown"}</span>
+                      {Number(bug.vote_count ?? 0) > 0 && (
+                        <Badge variant="outline" className="text-[10px] px-1 py-0">
+                          +{bug.vote_count}
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={cn("text-xs", statusConfig[bug.status])}>
+                      {bug.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={cn("text-xs", severityConfig[bug.severity])}>
+                      {bug.severity}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-xs">
+                      {bug.priority}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {Number(bug.comment_count ?? 0) > 0 ? (
+                      <Badge variant="secondary" className="text-xs">
+                        <MessageSquare className="mr-1 h-3 w-3" />
+                        {bug.comment_count}
                       </Badge>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="text-sm">
-                  <div className="flex items-center gap-2">
-                    <span>{bug.profile?.display_name || bug.profile?.email || "Unknown"}</span>
-                    {Number(bug.vote_count ?? 0) > 0 && (
-                      <Badge variant="outline" className="text-sm">
-                        +{bug.vote_count}
-                      </Badge>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={cn("text-xs", statusConfig[bug.status])}>
-                    {bug.status}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={cn("text-xs", severityConfig[bug.severity])}>
-                    {bug.severity}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className="text-xs">
-                    {bug.priority}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right text-sm text-muted-foreground">
-                  {formatDistanceToNow(new Date(bug.created_at), { addSuffix: true })}
-                </TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => openEditDialog(bug)}
-                  >
-                    {canEdit ? (
-                      <Pencil className="h-4 w-4" />
                     ) : (
-                      <Eye className="h-4 w-4" />
+                      <span className="text-xs text-muted-foreground/50">—</span>
                     )}
-                    <span className="sr-only">
-                      {canEdit ? "Edit bug" : "View bug"}
-                    </span>
-                  </Button>
-                </TableCell>
-              </TableRow>
-            )
-          })}
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground whitespace-nowrap">
+                    {formatCompactDateTime(bug.created_at)}
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground whitespace-nowrap">
+                    {formatCompactDateTime(bug.last_activity_at || bug.updated_at)}
+                  </TableCell>
+                </TableRow>
+              )
+            })
+          )}
         </TableBody>
       </Table>
     </div>

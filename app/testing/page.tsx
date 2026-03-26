@@ -12,7 +12,7 @@ export default async function TestingPage() {
   }
 
   const { rows: campaigns } = await query("SELECT * FROM campaigns ORDER BY start_date ASC NULLS LAST")
-  const [{ rows: components }, { rows: myBugs }] = await Promise.all([
+  const [{ rows: components }, { rows: allBugs }] = await Promise.all([
     query<{ campaign_id: string | null }>("SELECT campaign_id FROM components"),
     query(
       `SELECT b.*,
@@ -39,9 +39,7 @@ export default async function TestingPage() {
          WHERE bc.bug_id = b.id
            AND bc.deleted_at IS NULL
        ) comment_stats ON TRUE
-       WHERE b.user_id = $1
        ORDER BY last_activity_at DESC`,
-      [profile.id],
     ),
   ])
 
@@ -63,7 +61,7 @@ export default async function TestingPage() {
         </div>
         <UserStatsCards />
       </div>
-      <MyBugsTable bugs={myBugs || []} currentUserId={profile.id} isAdmin={profile.is_admin} />
+      <MyBugsTable bugs={allBugs || []} currentUserId={profile.id} isAdmin={profile.is_admin} />
     </div>
   )
 }
